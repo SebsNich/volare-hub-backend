@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(uuid())
+  nombre    String
+  email     String   @unique
+  password  String
+  rol       Rol      @default(RESIDENTE)
+  activo    Boolean  @default(true)
+  bio       String?
+  foto      String?
+  creadoEn  DateTime @default(now())
+  posts     Post[]
+}
+
+enum Rol {
+  ADMIN
+  RESIDENTE
+}
+
+model Post {
+  id            String     @id @default(uuid())
+  titulo        String
+  descripcion   String
+  tipo          TipoPost
+  imagenUrl     String?
+  archivoUrl    String?
+  anclado       Boolean    @default(false)
+  ancladoPerfil Boolean    @default(false)
+  estado        EstadoPost @default(ACTIVO)
+  creadoEn      DateTime   @default(now())
+  autor         User       @relation(fields: [autorId], references: [id])
+  autorId       String
+}
+
+enum TipoPost {
+  AVISO
+  OBRA
+  COMUNICADO
+  EMPRENDIMIENTO
+}
+
+enum EstadoPost {
+  ACTIVO
+  INACTIVO
+}
+
+model Suggestion {
+  id        String           @id @default(uuid())
+  nombre    String
+  tipo      TipoSugerencia
+  mensaje   String
+  estado    EstadoSugerencia @default(SIN_LEER)
+  creadoEn  DateTime         @default(now())
+}
+
+enum TipoSugerencia {
+  SUGERENCIA
+  QUEJA
+  CONSULTA
+  OTRO
+}
+
+enum EstadoSugerencia {
+  SIN_LEER
+  LEIDA
+}
