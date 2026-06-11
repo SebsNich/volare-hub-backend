@@ -108,8 +108,41 @@ const obtenerPerfil = async (req, res) => {
     }
 }
 
+const editarPerfil = async (req, res) => {
+    const {nombre, bio, foto} = req.body;
+
+    try{
+        const usuarioActualizado = await prisma.user.update({
+            where: {
+                id: req.user.id
+            },
+            data: {
+                nombre: nombre,
+                bio: bio,
+                foto: foto
+            },
+            select: {
+                id: true,
+                nombre: true,
+                email: true,
+                rol: true,
+                activo: true,
+                bio: true,
+                foto: true,
+                creadoEn: true
+            }
+        });
+        return res.status(200).json({ mensaje: 'Perfil actualizado exitosamente', user: usuarioActualizado });
+    }
+    catch (error) {
+        console.error('Error al editar perfil:', error);
+        return res.status(500).json({ mensaje: 'Error interno del servidor' });
+    }
+}
+
 module.exports = {
     registrar,
     login,
-    obtenerPerfil 
+    obtenerPerfil ,
+    editarPerfil
 }
