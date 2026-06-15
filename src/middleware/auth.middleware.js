@@ -20,4 +20,12 @@ const verificarToken = (req, res, next) => {
     }
 }
 
-module.exports = { verificarToken }
+const verificarAdmin = (req, res, next) => {
+    if (req.user && req.user.rol === 'ADMIN') {
+        next();
+    } else {
+        return res.status(403).json({ mensaje: 'Acceso denegado: se requieren privilegios de administrador' });
+    }
+}
+
+module.exports = { verificarToken, verificarAdmin }
