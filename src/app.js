@@ -3,13 +3,15 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 dotenv.config();
 
-const routes = require('./routes/auth.routes');
+const authRoutes = require('./routes/auth.routes');
+const postsRoutes = require('./routes/posts.routes');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
-app.use('/api/auth', routes)
+app.use('/api/auth', authRoutes)
+app.use('/api/posts', postsRoutes)
 
 app.get('/', (req, res) => {
     res.json({ mensaje: 'Bienvenido a la API de Volare Hub' });
