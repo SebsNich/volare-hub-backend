@@ -29,7 +29,7 @@ model Post {
   titulo        String
   descripcion   String
   tipo          TipoPost
-  imagenUrl     String?
+  imagenUrl     String[]
   archivoUrl    String?
   anclado       Boolean    @default(false)
   ancladoPerfil Boolean    @default(false)
