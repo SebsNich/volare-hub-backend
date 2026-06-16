@@ -1,8 +1,11 @@
 const prisma = require('../lib/prisma');
+const { subirArchivo } = require('../lib/cloudinary')
 
 const crearPost = async (req, res) => {
     const { titulo, descripcion, tipo} = req.body;
     const autorId = req.user.id;
+    const file = req.file;
+    let imagenUrl = null
 
     try {
         if (!titulo || !descripcion || !tipo) {
@@ -13,11 +16,17 @@ const crearPost = async (req, res) => {
             return res.status(403).json({ error: 'Los residentes solo pueden crear publicaciones de tipo EMPRENDIMIENTO'});
         }
 
+        if (file) {
+            const subida = await subirArchivo(file.buffer, 'volare-hub/posts')
+            imagenUrl = subida.secure_url
+        }
+
         const post = await prisma.post.create({
             data: {
                 titulo,
                 descripcion,
                 tipo,
+                imagenUrl,
                 autorId
             }
         });
