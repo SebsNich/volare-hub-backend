@@ -18,4 +18,26 @@ const subirArchivo = (buffer, carpeta) => {
     })
 }
 
-module.exports = { cloudinary, subirArchivo }
+const extraerPublicId = (url) => {
+    const parte1 = url.split('/upload/')[1]
+    const partes = parte1.split('/').slice(1);
+    const publicIdConExtension = partes.join('/')
+    const publicId = publicIdConExtension.split('.').slice(0, -1).join('.')
+    return publicId
+}
+
+const eliminarArchivo = async (url) => {
+    const publicId = extraerPublicId(url)
+
+    try {
+        const archivoEliminado = await cloudinary.uploader.destroy(publicId)
+        console.log('Archivo eliminado de Cloudinary:', archivoEliminado)
+        return archivoEliminado
+    }
+    catch (error) {
+        console.error('Error al eliminar archivo de Cloudinary:', error)
+        throw error
+    }
+}
+
+module.exports = { cloudinary, subirArchivo, extraerPublicId, eliminarArchivo }

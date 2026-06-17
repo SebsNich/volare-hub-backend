@@ -30,7 +30,7 @@ model Post {
   descripcion   String
   tipo          TipoPost
   imagenUrl     String[]
-  archivoUrl    String?
+  archivoUrl    String[]
   anclado       Boolean    @default(false)
   ancladoPerfil Boolean    @default(false)
   estado        EstadoPost @default(ACTIVO)

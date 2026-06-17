@@ -1,11 +1,12 @@
 const prisma = require('../lib/prisma');
-const { subirArchivo } = require('../lib/cloudinary')
+const { subirArchivo, eliminarArchivo, extraerPublicId } = require('../lib/cloudinary')
 
 const crearPost = async (req, res) => {
     const { titulo, descripcion, tipo} = req.body;
     const autorId = req.user.id;
-    const files = req.files;
+    const files = { imagenes: req.files?.imagenes, archivos: req.files?.archivos };
     let imagenesUrl = []
+    let archivosUrl = []
 
     try {
         if (!titulo || !descripcion || !tipo) {
@@ -16,11 +17,17 @@ const crearPost = async (req, res) => {
             return res.status(403).json({ error: 'Los residentes solo pueden crear publicaciones de tipo EMPRENDIMIENTO'});
         }
 
-        if (files) {
-            const urls = await Promise.all(
-                files.map(file => subirArchivo(file.buffer, 'volare-hub/posts'))
+        if (files.imagenes) {
+            const imageUrls = await Promise.all(
+                files.imagenes.map(file => subirArchivo(file.buffer, 'volare-hub/posts'))
             );
-            imagenesUrl = urls.map(resultado => resultado.secure_url)
+            imagenesUrl = imageUrls.map(resultado => resultado.secure_url)
+        }
+        if (files.archivos) {
+            const fileUrls = await Promise.all(
+                files.archivos.map(file => subirArchivo(file.buffer, 'volare-hub/posts'))
+            );
+            archivosUrl = fileUrls.map(resultado => resultado.secure_url)
         }
 
         const post = await prisma.post.create({
@@ -29,6 +36,7 @@ const crearPost = async (req, res) => {
                 descripcion,
                 tipo,
                 imagenUrl: imagenesUrl,
+                archivoUrl: archivosUrl,
                 autorId
             }
         });
@@ -89,6 +97,9 @@ const obtenerPostPorId = async (req, res) => {
 }
 
 const editarPost = async (req, res) => {
+    let imagenesNuevosUrl = []
+    let archivosNuevosUrl = []
+
     try{
         const post = await prisma.post.findUnique({
             where:{
@@ -101,7 +112,34 @@ const editarPost = async (req, res) => {
         if (req.user.rol === 'RESIDENTE' && post.autorId !== req.user.id) {
             return res.status(403).json({ error: 'No tienes permiso para editar este post' });
         }
-        const { titulo, descripcion, tipo, imagenUrl, archivoUrl } = req.body;
+        const { titulo, descripcion, tipo, imagenesAEliminar, archivosAEliminar } = req.body;
+
+        const files = { imagenes: req.files?.imagenes, archivos: req.files?.archivos };
+
+        post.imagenUrl = post.imagenUrl.filter(url => !imagenesAEliminar?.includes(url));
+        post.archivoUrl = post.archivoUrl.filter(url => !archivosAEliminar?.includes(url));
+
+        const imgsEliminadas = await Promise.all(
+            imagenesAEliminar?.map(url => eliminarArchivo(url)) || []
+        )
+
+        const archivosEliminados = await Promise.all(
+            archivosAEliminar?.map(url => eliminarArchivo(url)) || []
+        )
+
+        if (files.imagenes) {
+            const imageUrls = await Promise.all(
+                files.imagenes.map(file => subirArchivo(file.buffer, 'volare-hub/posts'))
+            );
+            imagenesNuevosUrl = imageUrls.map(resultado => resultado.secure_url)
+        }
+        if (files.archivos) {
+            const fileUrls = await Promise.all(
+                files.archivos.map(file => subirArchivo(file.buffer, 'volare-hub/posts'))
+            );
+            archivosNuevosUrl = fileUrls.map(resultado => resultado.secure_url)
+        }
+
         const postActualizado = await prisma.post.update({
             where: {
                 id: req.params.id
@@ -110,8 +148,8 @@ const editarPost = async (req, res) => {
                 titulo,
                 descripcion,
                 tipo,
-                imagenUrl,
-                archivoUrl
+                imagenUrl: [...post.imagenUrl, ...imagenesNuevosUrl],
+                archivoUrl: [...post.archivoUrl, ...archivosNuevosUrl]
             }
         });
         res.json(postActualizado);
@@ -134,6 +172,15 @@ const eliminarPost = async (req, res) => {
         if (req.user.rol === 'RESIDENTE' && post.autorId !== req.user.id) {
             return res.status(403).json({ error: 'No tienes permiso para editar este post' });
         }
+
+        const imagenesAEliminar = await Promise.all(
+            post.imagenUrl.map(url => eliminarArchivo(url))
+        )
+
+        const archivosAEliminar = await Promise.all(
+            post.archivoUrl.map(url => eliminarArchivo(url))
+        )
+
         const postEliminado = await prisma.post.delete({
             where: {
                 id: req.params.id
