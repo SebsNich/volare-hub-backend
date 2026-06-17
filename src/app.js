@@ -6,6 +6,7 @@ dotenv.config();
 const authRoutes = require('./routes/auth.routes');
 const postsRoutes = require('./routes/posts.routes');
 const suggestionsRoutes = require('./routes/buzon.routes')
+const userRoutes = require('./routes/usuarios.routes')
 
 const app = express();
 
@@ -14,6 +15,7 @@ app.use(express.json());
 app.use('/api/auth', authRoutes)
 app.use('/api/posts', postsRoutes)
 app.use('/api/buzon', suggestionsRoutes)
+app.use('/api/usuarios', userRoutes)
 
 app.get('/', (req, res) => {
     res.json({ mensaje: 'Bienvenido a la API de Volare Hub' });
