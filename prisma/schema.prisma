@@ -15,6 +15,8 @@ model User {
   activo    Boolean  @default(true)
   bio       String?
   foto      String?
+  manzana   String?
+  villa     String?
   creadoEn  DateTime @default(now())
   posts     Post[]
 }
