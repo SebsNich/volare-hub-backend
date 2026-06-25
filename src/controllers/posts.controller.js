@@ -52,13 +52,14 @@ const crearPost = async (req, res) => {
 const obtenerPosts = async (req, res) => {
     try {
         const posts = await prisma.post.findMany({
-            where: {
-                estado: 'ACTIVO'
-            },
-            orderBy: {
-                creadoEn: 'desc'
+            where: { estado: 'ACTIVO' },
+            orderBy: { creadoEn: 'desc' },
+            include: {
+                autor: {
+                    select: { nombre: true }
+                }
             }
-        });
+        })
         res.json(posts);
     }
     catch (error) {

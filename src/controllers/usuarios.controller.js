@@ -26,6 +26,11 @@ const obtenerPerfilPublico = async (req, res) => {
             },
             orderBy: {
                 creadoEn: 'desc'
+            },
+            include: {
+                autor: {
+                    select: { nombre: true }
+                }
             }
         });
         return res.status(200).json({ mensaje: 'Perfil obtenido exitosamente', user: user, posts: posts });
