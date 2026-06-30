@@ -115,17 +115,25 @@ const editarPost = async (req, res) => {
         }
         const { titulo, descripcion, tipo, imagenesAEliminar, archivosAEliminar } = req.body;
 
+        const imagenesAEliminarArray = imagenesAEliminar 
+            ? (Array.isArray(imagenesAEliminar) ? imagenesAEliminar : [imagenesAEliminar])
+            : []
+
+        const archivosAEliminarArray = archivosAEliminar 
+            ? (Array.isArray(archivosAEliminar) ? archivosAEliminar : [archivosAEliminar])
+            : []
+
         const files = { imagenes: req.files?.imagenes, archivos: req.files?.archivos };
 
-        post.imagenUrl = post.imagenUrl.filter(url => !imagenesAEliminar?.includes(url));
-        post.archivoUrl = post.archivoUrl.filter(url => !archivosAEliminar?.includes(url));
+        post.imagenUrl = post.imagenUrl.filter(url => !imagenesAEliminarArray?.includes(url));
+        post.archivoUrl = post.archivoUrl.filter(url => !archivosAEliminarArray?.includes(url));
 
         const imgsEliminadas = await Promise.all(
-            imagenesAEliminar?.map(url => eliminarArchivo(url)) || []
+            imagenesAEliminarArray?.map(url => eliminarArchivo(url)) || []
         )
 
         const archivosEliminados = await Promise.all(
-            archivosAEliminar?.map(url => eliminarArchivo(url)) || []
+            archivosAEliminarArray?.map(url => eliminarArchivo(url)) || []
         )
 
         if (files.imagenes) {
