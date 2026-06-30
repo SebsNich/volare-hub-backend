@@ -133,7 +133,7 @@ const editarPost = async (req, res) => {
         )
 
         const archivosEliminados = await Promise.all(
-            archivosAEliminarArray?.map(url => eliminarArchivo(url)) || []
+            archivosAEliminarArray?.map(url => eliminarArchivo(url, 'raw')) || []
         )
 
         if (files.imagenes) {
@@ -187,7 +187,7 @@ const eliminarPost = async (req, res) => {
         )
 
         const archivosAEliminar = await Promise.all(
-            post.archivoUrl.map(url => eliminarArchivo(url))
+            post.archivoUrl.map(url => eliminarArchivo(url, 'raw'))
         )
 
         const postEliminado = await prisma.post.delete({

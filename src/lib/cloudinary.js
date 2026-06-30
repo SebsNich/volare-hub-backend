@@ -23,19 +23,24 @@ const subirArchivo = (buffer, carpeta, tipo = 'image', nombreOriginal = '') => {
     })
 }
 
-const extraerPublicId = (url) => {
+const extraerPublicId = (url, tipo = 'image') => {
     const parte1 = url.split('/upload/')[1]
     const partes = parte1.split('/').slice(1);
     const publicIdConExtension = partes.join('/')
+    
+    if (tipo === 'raw') {
+        return publicIdConExtension
+    }
+    
     const publicId = publicIdConExtension.split('.').slice(0, -1).join('.')
     return publicId
 }
 
-const eliminarArchivo = async (url) => {
-    const publicId = extraerPublicId(url)
+const eliminarArchivo = async (url, tipo = 'image') => {
+    const publicId = extraerPublicId(url, tipo)
 
     try {
-        const archivoEliminado = await cloudinary.uploader.destroy(publicId)
+        const archivoEliminado = await cloudinary.uploader.destroy(publicId, { resource_type: tipo })
         console.log('Archivo eliminado de Cloudinary:', archivoEliminado)
         return archivoEliminado
     }
