@@ -19,13 +19,13 @@ const crearPost = async (req, res) => {
 
         if (files.imagenes) {
             const imageUrls = await Promise.all(
-                files.imagenes.map(file => subirArchivo(file.buffer, 'volare-hub/posts'))
+                files.imagenes.map(file => subirArchivo(file.buffer, 'volare-hub/posts', 'image', file.originalname))
             );
             imagenesUrl = imageUrls.map(resultado => resultado.secure_url)
         }
         if (files.archivos) {
             const fileUrls = await Promise.all(
-                files.archivos.map(file => subirArchivo(file.buffer, 'volare-hub/posts', 'raw'))
+                files.archivos.map(file => subirArchivo(file.buffer, 'volare-hub/posts', 'raw', file.originalname))
             );
             archivosUrl = fileUrls.map(resultado => resultado.secure_url)
         }
@@ -138,13 +138,13 @@ const editarPost = async (req, res) => {
 
         if (files.imagenes) {
             const imageUrls = await Promise.all(
-                files.imagenes.map(file => subirArchivo(file.buffer, 'volare-hub/posts'))
+                files.imagenes.map(file => subirArchivo(file.buffer, 'volare-hub/posts', 'image', file.originalname))
             );
             imagenesNuevosUrl = imageUrls.map(resultado => resultado.secure_url)
         }
         if (files.archivos) {
             const fileUrls = await Promise.all(
-                files.archivos.map(file => subirArchivo(file.buffer, 'volare-hub/posts', 'raw'))
+                files.archivos.map(file => subirArchivo(file.buffer, 'volare-hub/posts', 'raw', file.originalname))
             );
             archivosNuevosUrl = fileUrls.map(resultado => resultado.secure_url)
         }

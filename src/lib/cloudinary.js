@@ -6,10 +6,15 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 })
 
-const subirArchivo = (buffer, carpeta, tipo = 'image') => {
+const subirArchivo = (buffer, carpeta, tipo = 'image', nombreOriginal = '') => {
     return new Promise((resolve, reject) => {
         cloudinary.uploader.upload_stream(
-            { folder: carpeta, resource_type: tipo },
+            { 
+                folder: carpeta, 
+                resource_type: tipo,
+                use_filename: true,
+                filename_override: nombreOriginal
+            },
             (error, resultado) => {
                 if (error) reject(error)
                 else resolve(resultado)
