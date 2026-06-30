@@ -25,7 +25,7 @@ const crearPost = async (req, res) => {
         }
         if (files.archivos) {
             const fileUrls = await Promise.all(
-                files.archivos.map(file => subirArchivo(file.buffer, 'volare-hub/posts'))
+                files.archivos.map(file => subirArchivo(file.buffer, 'volare-hub/posts', 'raw'))
             );
             archivosUrl = fileUrls.map(resultado => resultado.secure_url)
         }
@@ -144,7 +144,7 @@ const editarPost = async (req, res) => {
         }
         if (files.archivos) {
             const fileUrls = await Promise.all(
-                files.archivos.map(file => subirArchivo(file.buffer, 'volare-hub/posts'))
+                files.archivos.map(file => subirArchivo(file.buffer, 'volare-hub/posts', 'raw'))
             );
             archivosNuevosUrl = fileUrls.map(resultado => resultado.secure_url)
         }
