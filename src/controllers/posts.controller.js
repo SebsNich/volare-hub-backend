@@ -2,7 +2,7 @@ const prisma = require('../lib/prisma');
 const { subirArchivo, eliminarArchivo, extraerPublicId } = require('../lib/cloudinary')
 
 const crearPost = async (req, res) => {
-    const { titulo, descripcion, tipo} = req.body;
+    const { titulo, descripcion, tipo, anclado, ancladoPerfil } = req.body;
     const autorId = req.user.id;
     const files = { imagenes: req.files?.imagenes, archivos: req.files?.archivos };
     let imagenesUrl = []
@@ -37,6 +37,8 @@ const crearPost = async (req, res) => {
                 tipo,
                 imagenUrl: imagenesUrl,
                 archivoUrl: archivosUrl,
+                anclado: req.user.rol === 'ADMIN' && anclado === 'true',
+                ancladoPerfil: ancladoPerfil === 'true',
                 autorId
             }
         });
@@ -53,10 +55,10 @@ const obtenerPosts = async (req, res) => {
     try {
         const posts = await prisma.post.findMany({
             where: { estado: 'ACTIVO' },
-            orderBy: { creadoEn: 'desc' },
+            orderBy: [{ anclado: 'desc' }, { creadoEn: 'desc' }],
             include: {
                 autor: {
-                    select: { nombre: true }
+                    select: { nombre: true, foto: true }
                 }
             }
         })
@@ -83,6 +85,8 @@ const obtenerPostPorId = async (req, res) => {
                 archivoUrl: true,
                 tipo: true,
                 estado: true,
+                anclado: true,
+                ancladoPerfil: true,
                 creadoEn: true,
             }
         })
@@ -203,10 +207,53 @@ const eliminarPost = async (req, res) => {
     }
 }
 
+const anclarPost = async (req, res) => {
+    try {
+        const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+        if (!post) {
+            return res.status(404).json({ error: 'Post no encontrado' });
+        }
+
+        const postActualizado = await prisma.post.update({
+            where: { id: req.params.id },
+            data: { anclado: !post.anclado }
+        });
+        res.json(postActualizado);
+    }
+    catch (error) {
+        console.error('Error al anclar post:', error);
+        res.status(500).json({ error: 'Error al anclar post' });
+    }
+}
+
+const anclarPostPerfil = async (req, res) => {
+    try {
+        const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+        if (!post) {
+            return res.status(404).json({ error: 'Post no encontrado' });
+        }
+        if (post.autorId !== req.user.id && req.user.rol !== 'ADMIN') {
+            return res.status(403).json({ error: 'No tienes permiso para anclar este post' });
+        }
+
+        const postActualizado = await prisma.post.update({
+            where: { id: req.params.id },
+            data: { ancladoPerfil: !post.ancladoPerfil }
+        });
+        res.json(postActualizado);
+    }
+    catch (error) {
+        console.error('Error al anclar post en el perfil:', error);
+        res.status(500).json({ error: 'Error al anclar post en el perfil' });
+    }
+}
+
 module.exports = {
     crearPost,
     obtenerPosts,
     obtenerPostPorId,
     editarPost,
+    anclarPost,
+    anclarPostPerfil,
     eliminarPost
 };

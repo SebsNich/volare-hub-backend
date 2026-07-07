@@ -24,12 +24,10 @@ const obtenerPerfilPublico = async (req, res) => {
             where: {
                 autorId: req.params.id
             },
-            orderBy: {
-                creadoEn: 'desc'
-            },
+            orderBy: [{ ancladoPerfil: 'desc' }, { creadoEn: 'desc' }],
             include: {
                 autor: {
-                    select: { nombre: true }
+                    select: { nombre: true, foto: true }
                 }
             }
         });

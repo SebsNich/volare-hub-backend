@@ -1,6 +1,7 @@
 const prisma = require('../lib/prisma');
 const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { subirArchivo, eliminarArchivo } = require('../lib/cloudinary');
 
 const registrar = async (req, res) => {
     const { nombre, email, password, manzana, villa } = req.body;
@@ -117,9 +118,25 @@ const obtenerPerfil = async (req, res) => {
 }
 
 const editarPerfil = async (req, res) => {
-    const {nombre, bio, foto} = req.body;
+    const { nombre, bio, eliminarFoto } = req.body;
 
     try{
+        const usuarioActual = await prisma.user.findUnique({ where: { id: req.user.id } });
+        let foto = usuarioActual.foto;
+
+        if (req.file) {
+            if (usuarioActual.foto) {
+                await eliminarArchivo(usuarioActual.foto);
+            }
+            const resultado = await subirArchivo(req.file.buffer, 'volare-hub/usuarios', 'image', req.file.originalname);
+            foto = resultado.secure_url;
+        } else if (eliminarFoto === 'true') {
+            if (usuarioActual.foto) {
+                await eliminarArchivo(usuarioActual.foto);
+            }
+            foto = null;
+        }
+
         const usuarioActualizado = await prisma.user.update({
             where: {
                 id: req.user.id
