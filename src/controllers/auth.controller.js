@@ -129,7 +129,7 @@ const editarPerfil = async (req, res) => {
             if (usuarioActual.foto) {
                 await eliminarArchivo(usuarioActual.foto);
             }
-            const resultado = await subirArchivo(req.file.buffer, 'volare-hub/usuarios', 'image', req.file.originalname);
+            const resultado = await subirArchivo(req.file.buffer, 'volare-hub/perfil/photos', 'image', req.file.originalname);
             foto = resultado.secure_url;
         } else if (eliminarFoto === 'true') {
             if (usuarioActual.foto) {
