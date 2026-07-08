@@ -3,10 +3,13 @@ const bcryptjs = require('bcryptjs');
 
 const obtenerPerfilPublico = async (req, res) => {
     try {
-        const user = await prisma.user.findUnique({
+        const user = await prisma.user.update({
             where:{
                 id: req.params.id
-                
+
+            },
+            data: {
+                visitasPerfil: { increment: 1 }
             },
             select: {
                 id: true,
@@ -14,12 +17,10 @@ const obtenerPerfilPublico = async (req, res) => {
                 rol: true,
                 bio: true,
                 foto: true,
-                creadoEn: true
+                creadoEn: true,
+                visitasPerfil: true
             }
         });
-        if (!user) {
-            return res.status(404).json({ error: 'Usuario no encontrado' });
-        }
         const posts = await prisma.post.findMany({
             where: {
                 autorId: req.params.id
@@ -34,6 +35,9 @@ const obtenerPerfilPublico = async (req, res) => {
         return res.status(200).json({ mensaje: 'Perfil obtenido exitosamente', user: user, posts: posts });
     }
     catch (error) {
+        if (error.code === 'P2025') {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
         console.error('Error al obtener el perfil público:', error);
         res.status(500).json({ error: 'Error al obtener el perfil público' });
     }

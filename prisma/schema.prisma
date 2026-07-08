@@ -18,6 +18,7 @@ model User {
   manzana   String?
   villa     String?
   creadoEn  DateTime @default(now())
+  visitasPerfil Int  @default(0)
   posts     Post[]
 }
 
