@@ -106,7 +106,8 @@ const obtenerPerfil = async (req, res) => {
                 villa: true,
                 bio: true,
                 foto: true,
-                creadoEn: true
+                creadoEn: true,
+                visitasPerfil: true
             }
         })
         return res.status(200).json({ mensaje: 'Perfil obtenido exitosamente', user: user });
@@ -154,7 +155,8 @@ const editarPerfil = async (req, res) => {
                 activo: true,
                 bio: true,
                 foto: true,
-                creadoEn: true
+                creadoEn: true,
+                visitasPerfil: true
             }
         });
         return res.status(200).json({ mensaje: 'Perfil actualizado exitosamente', user: usuarioActualizado });
@@ -205,7 +207,8 @@ const cambiarPassword = async (req, res) => {
                 villa: true,
                 bio: true,
                 foto: true,
-                creadoEn: true
+                creadoEn: true,
+                visitasPerfil: true
             }
         });
         return res.status(200).json({ mensaje: 'Contraseña actualizada exitosamente', user: usuarioActualizado });
@@ -263,7 +266,8 @@ const cambiarEmail = async (req, res) => {
                 villa: true,
                 bio: true,
                 foto: true,
-                creadoEn: true
+                creadoEn: true,
+                visitasPerfil: true
             }
         });
         return res.status(200).json({ mensaje: 'Email actualizado exitosamente', user: usuarioActualizado });
