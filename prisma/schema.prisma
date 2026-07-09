@@ -57,6 +57,8 @@ enum EstadoPost {
 model Suggestion {
   id        String           @id @default(uuid())
   nombre    String
+  manzana   String?
+  villa     String?
   tipo      TipoSugerencia
   mensaje   String
   estado    EstadoSugerencia @default(SIN_LEER)

@@ -1,7 +1,7 @@
 const prisma = require('../lib/prisma');
 
 const enviarSugerencia = async (req, res) => {
-    const {nombre, tipo, mensaje} = req.body;
+    const {nombre, manzana, villa, tipo, mensaje} = req.body;
 
     try{
         if (!nombre || !tipo || !mensaje) {
@@ -10,6 +10,8 @@ const enviarSugerencia = async (req, res) => {
         const sugerencia = await prisma.suggestion.create({
             data: {
                 nombre,
+                manzana,
+                villa,
                 tipo,
                 mensaje
             }
