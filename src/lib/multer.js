@@ -12,4 +12,16 @@ const upload = multer({
     }
 })
 
-module.exports = upload
+const MIMETYPES_RESERVAS = ['image/jpeg', 'image/png', 'application/pdf']
+
+const uploadReservas = multer({
+    storage: storage,
+    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB máximo
+    fileFilter: (req, file, cb) => {
+        MIMETYPES_RESERVAS.includes(file.mimetype)
+            ? cb(null, true)
+            : cb(new Error('Solo se permiten archivos JPG, PNG o PDF'), false)
+    }
+})
+
+module.exports = { upload, uploadReservas }

@@ -20,6 +20,7 @@ model User {
   creadoEn  DateTime @default(now())
   visitasPerfil Int  @default(0)
   posts     Post[]
+  reservas  Reserva[]
 }
 
 enum Rol {
@@ -76,4 +77,66 @@ enum EstadoSugerencia {
   SIN_LEER
   LEIDA
   ARCHIVADA
+}
+
+enum EspacioReservable {
+  CABANA_ARBOL
+  CABANA_MEDIO
+  CABANA_RIO
+  CASA_CLUB
+}
+
+enum HorarioReserva {
+  CABANA_COMPLETO
+  CASA_CLUB_MATUTINO
+  CASA_CLUB_VESPERTINO
+  CASA_CLUB_NOCTURNO
+}
+
+enum EstadoReserva {
+  PENDIENTE
+  APROBADA
+  RECHAZADA
+}
+
+enum TipoCuentaBancaria {
+  AHORROS
+  CORRIENTE
+}
+
+model Reserva {
+  id                  String            @id @default(uuid())
+  usuarioId           String
+  usuario             User              @relation(fields: [usuarioId], references: [id])
+
+  espacio             EspacioReservable
+  fecha               DateTime
+  horario             HorarioReserva
+
+  motivoEvento        String
+  nombres             String
+  apellidos           String
+  correo              String
+  celular             String
+  cedula              String
+
+  esParaTercero       Boolean           @default(false)
+
+  bancoNombre         String
+  numeroCuenta        String
+  tipoCuenta          TipoCuentaBancaria
+  cedulaRucBancario   String
+
+  montoAlquiler       Decimal
+  montoGarantia       Decimal
+
+  comprobantePagoUrl  String
+  listaInvitadosUrl   String
+  contratoFirmadoUrl  String
+
+  estado              EstadoReserva     @default(PENDIENTE)
+  motivoRechazo       String?
+
+  creadoEn            DateTime          @default(now())
+  actualizadoEn       DateTime          @updatedAt
 }

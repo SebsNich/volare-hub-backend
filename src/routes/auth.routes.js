@@ -1,7 +1,7 @@
 const router = require('express').Router()
 const { verificarToken } = require('../middleware/auth.middleware')
 const { registrar, login, obtenerPerfil, editarPerfil, cambiarPassword, cambiarEmail } = require('../controllers/auth.controller')
-const upload = require('../lib/multer')
+const { upload } = require('../lib/multer')
 
 router.post('/registrar', registrar)
 router.post('/login', login)

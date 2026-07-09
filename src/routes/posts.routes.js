@@ -1,7 +1,7 @@
 const router = require('express').Router()
 const { verificarToken, verificarAdmin } = require('../middleware/auth.middleware')
 const { crearPost, obtenerPosts, obtenerPostPorId, editarPost, eliminarPost, anclarPost, anclarPostPerfil } = require('../controllers/posts.controller')
-const upload = require('../lib/multer')
+const { upload } = require('../lib/multer')
 
 router.post('/', verificarToken, upload.fields([
     { name: 'imagenes', maxCount: 10 },
