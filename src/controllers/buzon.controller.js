@@ -55,8 +55,25 @@ const marcarLeida = async (req, res) => {
     }
 }
 
+const archivarSugerencia = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const sugerencia = await prisma.suggestion.update({
+            where: { id: id },
+            data: { estado: 'ARCHIVADA' }
+        });
+        res.status(200).json(sugerencia);
+    }
+    catch (error) {
+        console.error('Error al archivar sugerencia:', error);
+        res.status(500).json({ error: 'Error al archivar sugerencia' });
+    }
+}
+
 module.exports = {
     enviarSugerencia,
     obtenerSugerencias,
-    marcarLeida
+    marcarLeida,
+    archivarSugerencia
 }

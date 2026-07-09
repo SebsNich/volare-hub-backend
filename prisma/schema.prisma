@@ -75,4 +75,5 @@ enum TipoSugerencia {
 enum EstadoSugerencia {
   SIN_LEER
   LEIDA
+  ARCHIVADA
 }
