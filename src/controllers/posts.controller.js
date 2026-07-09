@@ -119,7 +119,12 @@ const editarPost = async (req, res) => {
         }
         const { titulo, descripcion, tipo, imagenesAEliminar, archivosAEliminar } = req.body;
 
-        const imagenesAEliminarArray = imagenesAEliminar 
+        const tipoFinal = tipo || post.tipo;
+        if (req.user.rol === 'RESIDENTE' && tipoFinal !== 'EMPRENDIMIENTO') {
+            return res.status(403).json({ error: 'Los residentes solo pueden editar publicaciones de tipo EMPRENDIMIENTO' });
+        }
+
+        const imagenesAEliminarArray = imagenesAEliminar
             ? (Array.isArray(imagenesAEliminar) ? imagenesAEliminar : [imagenesAEliminar])
             : []
 
