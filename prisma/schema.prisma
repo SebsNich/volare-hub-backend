@@ -121,6 +121,10 @@ model Reserva {
   cedula              String
 
   esParaTercero       Boolean           @default(false)
+  terceroNombre       String?
+  terceroCedula       String?
+  terceroCorreo       String?
+  terceroCelular      String?
 
   bancoNombre         String
   numeroCuenta        String
