@@ -2,6 +2,7 @@ const prisma = require('../lib/prisma');
 const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { subirArchivo, eliminarArchivo } = require('../lib/cloudinary');
+const { estaBloqueado, registrarIntentoFallido, limpiarIntentos } = require('../lib/rateLimiterRecuperacion');
 
 const registrar = async (req, res) => {
     const { nombre, email, password, manzana, villa } = req.body;
@@ -85,6 +86,57 @@ const login = async (req, res) => {
     }
     catch (error) {
         console.error('Error al iniciar sesión:', error);
+        return res.status(500).json({ mensaje: 'Error interno del servidor' });
+    }
+}
+
+const recuperarContrasena = async (req, res) => {
+    const { correo, manzana, villa, nuevaContrasena, confirmarContrasena } = req.body;
+    const ip = req.ip;
+
+    try {
+        if (!correo || !manzana || !villa || !nuevaContrasena || !confirmarContrasena) {
+            return res.status(400).json({ mensaje: 'Todos los campos son obligatorios' });
+        }
+
+        if (estaBloqueado(ip, correo)) {
+            return res.status(429).json({ mensaje: 'Demasiados intentos. Intenta de nuevo en unos minutos.' });
+        }
+
+        if (nuevaContrasena !== confirmarContrasena) {
+            return res.status(400).json({ mensaje: 'Las contraseñas no coinciden' });
+        }
+
+        const usuario = await prisma.user.findFirst({
+            where: {
+                email: { equals: correo.trim(), mode: 'insensitive' },
+                manzana: { equals: manzana.trim(), mode: 'insensitive' },
+                villa: { equals: villa.trim(), mode: 'insensitive' }
+            }
+        });
+
+        if (!usuario) {
+            registrarIntentoFallido(ip, correo);
+            return res.status(400).json({ mensaje: 'Los datos no coinciden con ninguna cuenta registrada.' });
+        }
+
+        const esIgualALaActual = await bcryptjs.compare(nuevaContrasena, usuario.password);
+        if (esIgualALaActual) {
+            return res.status(400).json({ mensaje: 'La nueva contraseña debe ser diferente a la actual.' });
+        }
+
+        const hash = await bcryptjs.hash(nuevaContrasena, 10);
+        await prisma.user.update({
+            where: { id: usuario.id },
+            data: { password: hash }
+        });
+
+        limpiarIntentos(ip, correo);
+
+        return res.status(200).json({ mensaje: 'Contraseña actualizada correctamente.' });
+    }
+    catch (error) {
+        console.error('Error al recuperar contraseña:', error);
         return res.status(500).json({ mensaje: 'Error interno del servidor' });
     }
 }
@@ -281,6 +333,7 @@ const cambiarEmail = async (req, res) => {
 module.exports = {
     registrar,
     login,
+    recuperarContrasena,
     obtenerPerfil ,
     editarPerfil,
     cambiarPassword,
