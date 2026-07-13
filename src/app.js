@@ -12,7 +12,21 @@ const reservasRoutes = require('./routes/reservas.routes')
 
 const app = express();
 
-app.use(cors());
+const origenesPermitidos = [
+    'http://localhost:5173',
+    'https://volare-hub-frontend-theta.vercel.app'
+]
+
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin || origenesPermitidos.includes(origin)) {
+            callback(null, true)
+        } else {
+            callback(new Error('No permitido por CORS'))
+        }
+    },
+    credentials: true
+}))
 app.use(express.json());
 app.use('/api/auth', authRoutes)
 app.use('/api/posts', postsRoutes)
