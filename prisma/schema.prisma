@@ -113,6 +113,9 @@ model Reserva {
   fecha               DateTime
   horario             HorarioReserva
 
+  manzana             String
+  villa               String
+
   motivoEvento        String
   nombres             String
   apellidos           String
@@ -134,12 +137,15 @@ model Reserva {
   montoAlquiler       Decimal
   montoGarantia       Decimal
 
-  comprobantePagoUrl  String
-  listaInvitadosUrl   String
-  contratoFirmadoUrl  String
+  comprobantePagoUrls   String[]        @default([])
+  listaInvitadosUrls    String[]        @default([])
+  contratoFirmadoUrls   String[]        @default([])
 
   estado              EstadoReserva     @default(PENDIENTE)
   motivoRechazo       String?
+  observacionAdmin    String?
+
+  notificacionPendiente Boolean         @default(false)
 
   creadoEn            DateTime          @default(now())
   actualizadoEn       DateTime          @updatedAt

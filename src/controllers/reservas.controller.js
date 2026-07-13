@@ -21,6 +21,28 @@ function tipoRecursoDesdeUrl(url) {
     return url && url.includes('/raw/upload/') ? 'raw' : 'image';
 }
 
+async function subirArchivosSlot(archivos, carpeta, prefijo = '') {
+    const subidos = await Promise.all(
+        archivos.map(archivo => subirArchivo(
+            archivo.buffer,
+            carpeta,
+            tipoRecursoCloudinary(archivo.mimetype),
+            `${prefijo}${archivo.originalname}`
+        ))
+    );
+    return subidos.map(resultado => resultado.secure_url);
+}
+
+function parseArrayExistente(valor) {
+    if (valor === undefined || valor === null || valor === '') return [];
+    try {
+        const parsed = JSON.parse(valor);
+        return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+        return Array.isArray(valor) ? valor : [valor];
+    }
+}
+
 function datosTercero(espacio, esParaTerceroBool, terceroNombre, terceroCedula, terceroCorreo, terceroCelular) {
     if (!esParaTerceroBool || espacio !== 'CASA_CLUB') {
         return { valido: true, datos: { terceroNombre: null, terceroCedula: null, terceroCorreo: null, terceroCelular: null } };
@@ -28,6 +50,10 @@ function datosTercero(espacio, esParaTerceroBool, terceroNombre, terceroCedula, 
 
     if (!terceroNombre || !terceroCedula || !terceroCorreo || !terceroCelular) {
         return { valido: false, mensaje: 'Los datos del tercero (nombre, cédula, correo y celular) son obligatorios cuando la reserva es para un tercero' };
+    }
+
+    if (!/^\d{10}$/.test(terceroCedula)) {
+        return { valido: false, mensaje: 'La cédula del tercero debe tener exactamente 10 dígitos numéricos' };
     }
 
     return { valido: true, datos: { terceroNombre, terceroCedula, terceroCorreo, terceroCelular } };
@@ -95,28 +121,32 @@ const obtenerDisponibilidadCasaClub = async (req, res) => {
 
 const crearReserva = async (req, res) => {
     try {
-        if (req.user.rol !== 'RESIDENTE') {
-            return res.status(403).json({ error: 'Solo los residentes pueden crear reservas' });
-        }
-
         const {
-            espacio, fecha, horario, motivoEvento, nombres, apellidos, correo, celular, cedula,
+            espacio, fecha, horario, motivoEvento, manzana, villa, nombres, apellidos, correo, celular, cedula,
             esParaTercero, terceroNombre, terceroCedula, terceroCorreo, terceroCelular,
             bancoNombre, numeroCuenta, tipoCuenta, cedulaRucBancario
         } = req.body;
 
         const archivos = {
-            comprobantePago: req.files?.comprobantePago?.[0],
-            listaInvitados: req.files?.listaInvitados?.[0],
-            contratoFirmado: req.files?.contratoFirmado?.[0]
+            comprobantePago: req.files?.comprobantePago || [],
+            listaInvitados: req.files?.listaInvitados || [],
+            contratoFirmado: req.files?.contratoFirmado || []
         };
 
-        const camposObligatorios = { espacio, fecha, horario, motivoEvento, nombres, apellidos, correo, celular, cedula, bancoNombre, numeroCuenta, tipoCuenta, cedulaRucBancario };
+        const camposObligatorios = { espacio, fecha, horario, motivoEvento, manzana, villa, nombres, apellidos, correo, celular, cedula, bancoNombre, numeroCuenta, tipoCuenta, cedulaRucBancario };
         const faltanCampos = Object.values(camposObligatorios).some(valor => !valor);
-        const faltanArchivos = !archivos.comprobantePago || !archivos.listaInvitados || !archivos.contratoFirmado;
+        const faltanArchivos = archivos.comprobantePago.length === 0 || archivos.listaInvitados.length === 0 || archivos.contratoFirmado.length === 0;
 
         if (faltanCampos || faltanArchivos) {
             return res.status(400).json({ error: 'Faltan campos o archivos obligatorios' });
+        }
+
+        if (!/^\d{10}$/.test(cedula)) {
+            return res.status(400).json({ error: 'La cédula debe tener exactamente 10 dígitos numéricos' });
+        }
+
+        if (!/^\d{10}$/.test(cedulaRucBancario) && !/^\d{13}$/.test(cedulaRucBancario)) {
+            return res.status(400).json({ error: 'La cédula debe tener 10 dígitos o el RUC 13 dígitos' });
         }
 
         if (!ESPACIOS_VALIDOS.includes(espacio)) {
@@ -169,25 +199,10 @@ const crearReserva = async (req, res) => {
 
         const { montoAlquiler, montoGarantia } = calcularMontos(espacio, horario, esParaTerceroBool);
 
-        const [comprobantePagoSubido, listaInvitadosSubido, contratoFirmadoSubido] = await Promise.all([
-            subirArchivo(
-                archivos.comprobantePago.buffer,
-                obtenerCarpetaReserva(espacio, 'comprobantes'),
-                tipoRecursoCloudinary(archivos.comprobantePago.mimetype),
-                archivos.comprobantePago.originalname
-            ),
-            subirArchivo(
-                archivos.listaInvitados.buffer,
-                obtenerCarpetaReserva(espacio, 'documentos'),
-                tipoRecursoCloudinary(archivos.listaInvitados.mimetype),
-                `invitados-${archivos.listaInvitados.originalname}`
-            ),
-            subirArchivo(
-                archivos.contratoFirmado.buffer,
-                obtenerCarpetaReserva(espacio, 'documentos'),
-                tipoRecursoCloudinary(archivos.contratoFirmado.mimetype),
-                `contrato-${archivos.contratoFirmado.originalname}`
-            )
+        const [comprobantePagoUrls, listaInvitadosUrls, contratoFirmadoUrls] = await Promise.all([
+            subirArchivosSlot(archivos.comprobantePago, obtenerCarpetaReserva(espacio, 'comprobantes')),
+            subirArchivosSlot(archivos.listaInvitados, obtenerCarpetaReserva(espacio, 'documentos'), 'invitados-'),
+            subirArchivosSlot(archivos.contratoFirmado, obtenerCarpetaReserva(espacio, 'documentos'), 'contrato-')
         ]);
 
         const reserva = await prisma.reserva.create({
@@ -197,6 +212,8 @@ const crearReserva = async (req, res) => {
                 fecha: fechaObj,
                 horario,
                 motivoEvento,
+                manzana,
+                villa,
                 nombres,
                 apellidos,
                 correo,
@@ -210,9 +227,9 @@ const crearReserva = async (req, res) => {
                 cedulaRucBancario,
                 montoAlquiler,
                 montoGarantia,
-                comprobantePagoUrl: comprobantePagoSubido.secure_url,
-                listaInvitadosUrl: listaInvitadosSubido.secure_url,
-                contratoFirmadoUrl: contratoFirmadoSubido.secure_url
+                comprobantePagoUrls,
+                listaInvitadosUrls,
+                contratoFirmadoUrls
             }
         });
 
@@ -261,21 +278,30 @@ const editarReserva = async (req, res) => {
         }
 
         const {
-            motivoEvento, nombres, apellidos, correo, celular, cedula,
+            motivoEvento, manzana, villa, nombres, apellidos, correo, celular, cedula,
             esParaTercero, terceroNombre, terceroCedula, terceroCorreo, terceroCelular,
-            bancoNombre, numeroCuenta, tipoCuenta, cedulaRucBancario
+            bancoNombre, numeroCuenta, tipoCuenta, cedulaRucBancario,
+            comprobantePagoExistente, listaInvitadosExistente, contratoFirmadoExistente
         } = req.body;
 
-        const archivos = {
-            comprobantePago: req.files?.comprobantePago?.[0],
-            listaInvitados: req.files?.listaInvitados?.[0],
-            contratoFirmado: req.files?.contratoFirmado?.[0]
+        const archivosNuevos = {
+            comprobantePago: req.files?.comprobantePago || [],
+            listaInvitados: req.files?.listaInvitados || [],
+            contratoFirmado: req.files?.contratoFirmado || []
         };
 
-        const camposObligatorios = { motivoEvento, nombres, apellidos, correo, celular, cedula, bancoNombre, numeroCuenta, tipoCuenta, cedulaRucBancario };
+        const camposObligatorios = { motivoEvento, manzana, villa, nombres, apellidos, correo, celular, cedula, bancoNombre, numeroCuenta, tipoCuenta, cedulaRucBancario };
         const faltanCampos = Object.values(camposObligatorios).some(valor => !valor);
         if (faltanCampos) {
             return res.status(400).json({ error: 'Faltan campos obligatorios' });
+        }
+
+        if (!/^\d{10}$/.test(cedula)) {
+            return res.status(400).json({ error: 'La cédula debe tener exactamente 10 dígitos numéricos' });
+        }
+
+        if (!/^\d{10}$/.test(cedulaRucBancario) && !/^\d{13}$/.test(cedulaRucBancario)) {
+            return res.status(400).json({ error: 'La cédula debe tener 10 dígitos o el RUC 13 dígitos' });
         }
 
         if (!TIPOS_CUENTA_VALIDOS.includes(tipoCuenta)) {
@@ -291,31 +317,46 @@ const editarReserva = async (req, res) => {
 
         const { montoAlquiler, montoGarantia } = calcularMontos(reservaActual.espacio, reservaActual.horario, esParaTerceroBool);
 
-        const urlsArchivos = {};
         const subcarpetaPorSlot = { comprobantePago: 'comprobantes', listaInvitados: 'documentos', contratoFirmado: 'documentos' };
         const prefijoPorSlot = { comprobantePago: '', listaInvitados: 'invitados-', contratoFirmado: 'contrato-' };
-        const campoUrlPorSlot = { comprobantePago: 'comprobantePagoUrl', listaInvitados: 'listaInvitadosUrl', contratoFirmado: 'contratoFirmadoUrl' };
+        const campoArrayPorSlot = { comprobantePago: 'comprobantePagoUrls', listaInvitados: 'listaInvitadosUrls', contratoFirmado: 'contratoFirmadoUrls' };
 
+        const conservadas = {
+            comprobantePago: parseArrayExistente(comprobantePagoExistente),
+            listaInvitados: parseArrayExistente(listaInvitadosExistente),
+            contratoFirmado: parseArrayExistente(contratoFirmadoExistente)
+        };
+
+        const faltanArchivosFinal = ['comprobantePago', 'listaInvitados', 'contratoFirmado']
+            .some(slot => conservadas[slot].length + archivosNuevos[slot].length === 0);
+        if (faltanArchivosFinal) {
+            return res.status(400).json({ error: 'Cada campo de documentos debe tener al menos un archivo' });
+        }
+
+        const urlsAEliminar = [];
         for (const slot of ['comprobantePago', 'listaInvitados', 'contratoFirmado']) {
-            const archivo = archivos[slot];
-            if (!archivo) continue;
+            const originales = reservaActual[campoArrayPorSlot[slot]];
+            const aEliminar = originales.filter(url => !conservadas[slot].includes(url));
+            urlsAEliminar.push(...aEliminar);
+        }
+        await Promise.all(urlsAEliminar.map(url => eliminarArchivo(url, tipoRecursoDesdeUrl(url))));
 
-            const urlAnterior = reservaActual[campoUrlPorSlot[slot]];
-            await eliminarArchivo(urlAnterior, tipoRecursoDesdeUrl(urlAnterior));
-
-            const subido = await subirArchivo(
-                archivo.buffer,
+        const urlsArchivos = {};
+        for (const slot of ['comprobantePago', 'listaInvitados', 'contratoFirmado']) {
+            const nuevasUrls = await subirArchivosSlot(
+                archivosNuevos[slot],
                 obtenerCarpetaReserva(reservaActual.espacio, subcarpetaPorSlot[slot]),
-                tipoRecursoCloudinary(archivo.mimetype),
-                `${prefijoPorSlot[slot]}${archivo.originalname}`
+                prefijoPorSlot[slot]
             );
-            urlsArchivos[campoUrlPorSlot[slot]] = subido.secure_url;
+            urlsArchivos[campoArrayPorSlot[slot]] = [...conservadas[slot], ...nuevasUrls];
         }
 
         const reserva = await prisma.reserva.update({
             where: { id: req.params.id },
             data: {
                 motivoEvento,
+                manzana,
+                villa,
                 nombres,
                 apellidos,
                 correo,
@@ -329,6 +370,7 @@ const editarReserva = async (req, res) => {
                 cedulaRucBancario,
                 montoAlquiler,
                 montoGarantia,
+                observacionAdmin: null,
                 ...urlsArchivos
             }
         });
@@ -377,7 +419,7 @@ const aprobarReserva = async (req, res) => {
     try {
         const reserva = await prisma.reserva.update({
             where: { id: req.params.id },
-            data: { estado: 'APROBADA', motivoRechazo: null }
+            data: { estado: 'APROBADA', motivoRechazo: null, notificacionPendiente: true }
         });
         res.status(200).json(reserva);
     }
@@ -390,15 +432,76 @@ const aprobarReserva = async (req, res) => {
 const rechazarReserva = async (req, res) => {
     try {
         const { motivoRechazo } = req.body;
+
+        if (!motivoRechazo) {
+            return res.status(400).json({ error: 'Debes indicar el motivo del rechazo' });
+        }
+
         const reserva = await prisma.reserva.update({
             where: { id: req.params.id },
-            data: { estado: 'RECHAZADA', motivoRechazo: motivoRechazo || null }
+            data: { estado: 'RECHAZADA', motivoRechazo, notificacionPendiente: true }
         });
         res.status(200).json(reserva);
     }
     catch (error) {
         console.error('Error al rechazar reserva:', error);
         res.status(500).json({ error: 'Error al rechazar reserva' });
+    }
+}
+
+const enviarObservacion = async (req, res) => {
+    try {
+        const { observacion } = req.body;
+
+        if (!observacion) {
+            return res.status(400).json({ error: 'Debes indicar el texto de la observación' });
+        }
+
+        const reservaActual = await prisma.reserva.findUnique({ where: { id: req.params.id } });
+        if (!reservaActual) {
+            return res.status(404).json({ error: 'Reserva no encontrada' });
+        }
+
+        if (reservaActual.estado !== 'PENDIENTE') {
+            return res.status(400).json({ error: 'Solo puedes enviar observaciones a reservas pendientes' });
+        }
+
+        const reserva = await prisma.reserva.update({
+            where: { id: req.params.id },
+            data: { observacionAdmin: observacion, notificacionPendiente: true }
+        });
+        res.status(200).json(reserva);
+    }
+    catch (error) {
+        console.error('Error al enviar la observación:', error);
+        res.status(500).json({ error: 'Error al enviar la observación' });
+    }
+}
+
+const obtenerNotificacionesNoLeidas = async (req, res) => {
+    try {
+        const cantidad = await prisma.reserva.count({
+            where: { usuarioId: req.user.id, notificacionPendiente: true }
+        });
+        res.status(200).json({ cantidad });
+    }
+    catch (error) {
+        console.error('Error al obtener notificaciones no leídas:', error);
+        res.status(500).json({ error: 'Error al obtener notificaciones no leídas' });
+    }
+}
+
+const marcarNotificacionesLeidas = async (req, res) => {
+    try {
+        await prisma.reserva.updateMany({
+            where: { usuarioId: req.user.id, notificacionPendiente: true },
+            data: { notificacionPendiente: false }
+        });
+        res.status(200).json({ mensaje: 'Notificaciones marcadas como leídas' });
+    }
+    catch (error) {
+        console.error('Error al marcar notificaciones como leídas:', error);
+        res.status(500).json({ error: 'Error al marcar notificaciones como leídas' });
     }
 }
 
@@ -411,5 +514,8 @@ module.exports = {
     obtenerMisReservas,
     obtenerReservas,
     aprobarReserva,
-    rechazarReserva
+    rechazarReserva,
+    enviarObservacion,
+    obtenerNotificacionesNoLeidas,
+    marcarNotificacionesLeidas
 }

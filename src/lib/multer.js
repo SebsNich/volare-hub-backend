@@ -24,4 +24,10 @@ const uploadReservas = multer({
     }
 })
 
-module.exports = { upload, uploadReservas }
+const camposArchivosReservas = uploadReservas.fields([
+    { name: 'comprobantePago', maxCount: 5 },
+    { name: 'listaInvitados', maxCount: 5 },
+    { name: 'contratoFirmado', maxCount: 5 }
+])
+
+module.exports = { upload, uploadReservas, camposArchivosReservas }
