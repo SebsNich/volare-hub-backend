@@ -13,7 +13,8 @@ const obtenerPerfilPublico = async (req, res) => {
             },
             select: {
                 id: true,
-                nombre: true,
+                nombres: true,
+                apellidos: true,
                 rol: true,
                 bio: true,
                 foto: true,
@@ -28,7 +29,7 @@ const obtenerPerfilPublico = async (req, res) => {
             orderBy: [{ ancladoPerfil: 'desc' }, { creadoEn: 'desc' }],
             include: {
                 autor: {
-                    select: { nombre: true, foto: true }
+                    select: { nombres: true, apellidos: true, foto: true }
                 }
             }
         });
@@ -48,7 +49,10 @@ const listarUsuarios = async (req, res) => {
         const usuarios = await prisma.user.findMany({
             select: {
                 id: true,
-                nombre: true,
+                nombres: true,
+                apellidos: true,
+                cedula: true,
+                celular: true,
                 email: true,
                 rol: true,
                 activo: true,
@@ -80,7 +84,10 @@ const cambiarEstadoUsuario = async (req, res) => {
             },
             select: {
                 id: true,
-                nombre: true,
+                nombres: true,
+                apellidos: true,
+                cedula: true,
+                celular: true,
                 email: true,
                 rol: true,
                 activo: true,
@@ -101,13 +108,13 @@ const cambiarEstadoUsuario = async (req, res) => {
 }
 
 const crearAdmin = async (req, res) => {
-    const { nombre, email, password, manzana, villa } = req.body;
+    const { nombres, apellidos, email, password, manzana, villa } = req.body;
 
     try {
-        if (!nombre || !email || !password) {
+        if (!nombres || !apellidos || !email || !password) {
             return res.status(400).json({ mensaje: 'Todos los campos son obligatorios' })
         }
-        
+
         const usuarioExistente = await prisma.user.findUnique({
             where: {
                 email: email
@@ -122,7 +129,9 @@ const crearAdmin = async (req, res) => {
 
         const resultado = await prisma.user.create({
             data: {
-                nombre: nombre,
+                nombre: `${nombres} ${apellidos}`.trim(),
+                nombres: nombres,
+                apellidos: apellidos,
                 manzana: manzana,
                 villa: villa,
                 email: email,
@@ -131,7 +140,8 @@ const crearAdmin = async (req, res) => {
             },
             select: {
                 id: true,
-                nombre: true,
+                nombres: true,
+                apellidos: true,
                 email: true,
                 rol: true,
                 activo: true,

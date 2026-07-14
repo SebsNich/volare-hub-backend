@@ -3,15 +3,20 @@ const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { subirArchivo, eliminarArchivo } = require('../lib/cloudinary');
 const { estaBloqueado, registrarIntentoFallido, limpiarIntentos } = require('../lib/rateLimiterRecuperacion');
+const { esCedulaValida } = require('../lib/validadores');
 
 const registrar = async (req, res) => {
-    const { nombre, email, password, manzana, villa } = req.body;
+    const { nombres, apellidos, email, password, cedula, celular, manzana, villa } = req.body;
 
     try {
-        if (!nombre || !email || !password || !manzana || !villa) {
+        if (!nombres || !apellidos || !email || !password || !cedula || !celular || !manzana || !villa) {
             return res.status(400).json({ mensaje: 'Todos los campos son obligatorios' })
         }
-        
+
+        if (!esCedulaValida(cedula)) {
+            return res.status(400).json({ mensaje: 'La cédula debe tener exactamente 10 dígitos numéricos' });
+        }
+
         const usuarioExistente = await prisma.user.findUnique({
             where: {
                 email: email
@@ -26,7 +31,11 @@ const registrar = async (req, res) => {
 
         const resultado = await prisma.user.create({
             data: {
-                nombre: nombre,
+                nombre: `${nombres} ${apellidos}`.trim(),
+                nombres: nombres,
+                apellidos: apellidos,
+                cedula: cedula,
+                celular: celular,
                 manzana: manzana,
                 villa: villa,
                 email: email,
@@ -150,7 +159,10 @@ const obtenerPerfil = async (req, res) => {
             },
             select: {
                 id: true,
-                nombre: true,
+                nombres: true,
+                apellidos: true,
+                cedula: true,
+                celular: true,
                 email: true,
                 rol: true,
                 activo: true,
@@ -171,7 +183,7 @@ const obtenerPerfil = async (req, res) => {
 }
 
 const editarPerfil = async (req, res) => {
-    const { nombre, bio, eliminarFoto } = req.body;
+    const { nombres, apellidos, bio, eliminarFoto } = req.body;
 
     try{
         const usuarioActual = await prisma.user.findUnique({ where: { id: req.user.id } });
@@ -195,16 +207,22 @@ const editarPerfil = async (req, res) => {
                 id: req.user.id
             },
             data: {
-                nombre: nombre,
+                nombres: nombres,
+                apellidos: apellidos,
                 bio: bio,
                 foto: foto
             },
             select: {
                 id: true,
-                nombre: true,
+                nombres: true,
+                apellidos: true,
+                cedula: true,
+                celular: true,
                 email: true,
                 rol: true,
                 activo: true,
+                manzana: true,
+                villa: true,
                 bio: true,
                 foto: true,
                 creadoEn: true,
@@ -251,7 +269,10 @@ const cambiarPassword = async (req, res) => {
             },
             select: {
                 id: true,
-                nombre: true,
+                nombres: true,
+                apellidos: true,
+                cedula: true,
+                celular: true,
                 email: true,
                 rol: true,
                 activo: true,
@@ -310,7 +331,10 @@ const cambiarEmail = async (req, res) => {
             },
             select: {
                 id: true,
-                nombre: true,
+                nombres: true,
+                apellidos: true,
+                cedula: true,
+                celular: true,
                 email: true,
                 rol: true,
                 activo: true,

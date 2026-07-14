@@ -1,5 +1,6 @@
 const prisma = require('../lib/prisma');
 const { subirArchivo, eliminarArchivo } = require('../lib/cloudinary');
+const { esCedulaValida } = require('../lib/validadores');
 const {
     CABANAS,
     esCabana,
@@ -52,7 +53,7 @@ function datosTercero(espacio, esParaTerceroBool, terceroNombre, terceroCedula, 
         return { valido: false, mensaje: 'Los datos del tercero (nombre, cédula, correo y celular) son obligatorios cuando la reserva es para un tercero' };
     }
 
-    if (!/^\d{10}$/.test(terceroCedula)) {
+    if (!esCedulaValida(terceroCedula)) {
         return { valido: false, mensaje: 'La cédula del tercero debe tener exactamente 10 dígitos numéricos' };
     }
 
@@ -141,11 +142,11 @@ const crearReserva = async (req, res) => {
             return res.status(400).json({ error: 'Faltan campos o archivos obligatorios' });
         }
 
-        if (!/^\d{10}$/.test(cedula)) {
+        if (!esCedulaValida(cedula)) {
             return res.status(400).json({ error: 'La cédula debe tener exactamente 10 dígitos numéricos' });
         }
 
-        if (!/^\d{10}$/.test(cedulaRucBancario) && !/^\d{13}$/.test(cedulaRucBancario)) {
+        if (!esCedulaValida(cedulaRucBancario) && !/^\d{13}$/.test(cedulaRucBancario)) {
             return res.status(400).json({ error: 'La cédula debe tener 10 dígitos o el RUC 13 dígitos' });
         }
 
@@ -296,11 +297,11 @@ const editarReserva = async (req, res) => {
             return res.status(400).json({ error: 'Faltan campos obligatorios' });
         }
 
-        if (!/^\d{10}$/.test(cedula)) {
+        if (!esCedulaValida(cedula)) {
             return res.status(400).json({ error: 'La cédula debe tener exactamente 10 dígitos numéricos' });
         }
 
-        if (!/^\d{10}$/.test(cedulaRucBancario) && !/^\d{13}$/.test(cedulaRucBancario)) {
+        if (!esCedulaValida(cedulaRucBancario) && !/^\d{13}$/.test(cedulaRucBancario)) {
             return res.status(400).json({ error: 'La cédula debe tener 10 dígitos o el RUC 13 dígitos' });
         }
 
@@ -403,7 +404,7 @@ const obtenerReservas = async (req, res) => {
             orderBy: { creadoEn: 'desc' },
             include: {
                 usuario: {
-                    select: { id: true, nombre: true, email: true, manzana: true, villa: true, foto: true }
+                    select: { id: true, nombres: true, apellidos: true, email: true, manzana: true, villa: true, foto: true }
                 }
             }
         });

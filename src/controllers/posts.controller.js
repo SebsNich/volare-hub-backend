@@ -58,7 +58,7 @@ const obtenerPosts = async (req, res) => {
             orderBy: [{ anclado: 'desc' }, { creadoEn: 'desc' }],
             include: {
                 autor: {
-                    select: { nombre: true, foto: true }
+                    select: { nombres: true, apellidos: true, foto: true }
                 }
             }
         })
