@@ -1,3 +1,4 @@
 node_modules/
 .env
+.env.nueva-org
 /src/generated/prisma
