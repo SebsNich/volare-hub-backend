@@ -136,10 +136,9 @@ const crearReserva = async (req, res) => {
 
         const camposObligatorios = { espacio, fecha, horario, motivoEvento, manzana, villa, nombres, apellidos, correo, celular, cedula, bancoNombre, numeroCuenta, tipoCuenta, cedulaRucBancario };
         const faltanCampos = Object.values(camposObligatorios).some(valor => !valor);
-        const faltanArchivos = archivos.comprobantePago.length === 0 || archivos.listaInvitados.length === 0 || archivos.contratoFirmado.length === 0;
 
-        if (faltanCampos || faltanArchivos) {
-            return res.status(400).json({ error: 'Faltan campos o archivos obligatorios' });
+        if (faltanCampos) {
+            return res.status(400).json({ error: 'Faltan campos obligatorios' });
         }
 
         if (!esCedulaValida(cedula)) {
@@ -327,12 +326,6 @@ const editarReserva = async (req, res) => {
             listaInvitados: parseArrayExistente(listaInvitadosExistente),
             contratoFirmado: parseArrayExistente(contratoFirmadoExistente)
         };
-
-        const faltanArchivosFinal = ['comprobantePago', 'listaInvitados', 'contratoFirmado']
-            .some(slot => conservadas[slot].length + archivosNuevos[slot].length === 0);
-        if (faltanArchivosFinal) {
-            return res.status(400).json({ error: 'Cada campo de documentos debe tener al menos un archivo' });
-        }
 
         const urlsAEliminar = [];
         for (const slot of ['comprobantePago', 'listaInvitados', 'contratoFirmado']) {
