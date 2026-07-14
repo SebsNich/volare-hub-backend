@@ -25,6 +25,17 @@ model User {
   visitasPerfil Int  @default(0)
   posts     Post[]
   reservas  Reserva[]
+  tokensRecuperacion TokenRecuperacion[]
+}
+
+model TokenRecuperacion {
+  id          String   @id @default(uuid())
+  token       String   @unique
+  usuarioId   String
+  usuario     User     @relation(fields: [usuarioId], references: [id])
+  usado       Boolean  @default(false)
+  expiraEn    DateTime
+  creadoEn    DateTime @default(now())
 }
 
 enum Rol {

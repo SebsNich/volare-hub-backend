@@ -1,9 +1,11 @@
+const crypto = require('crypto');
 const prisma = require('../lib/prisma');
 const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { subirArchivo, eliminarArchivo } = require('../lib/cloudinary');
 const { estaBloqueado, registrarIntentoFallido, limpiarIntentos } = require('../lib/rateLimiterRecuperacion');
 const { esCedulaValida } = require('../lib/validadores');
+const { enviarCorreoRecuperacion } = require('../lib/resend');
 
 const registrar = async (req, res) => {
     const { nombres, apellidos, email, password, cedula, celular, manzana, villa } = req.body;
@@ -99,53 +101,89 @@ const login = async (req, res) => {
     }
 }
 
-const recuperarContrasena = async (req, res) => {
-    const { correo, manzana, villa, nuevaContrasena, confirmarContrasena } = req.body;
+const solicitarRecuperacion = async (req, res) => {
+    const { correo } = req.body;
     const ip = req.ip;
+    const MENSAJE_GENERICO = 'Si el correo existe, te enviamos instrucciones para restablecer tu contraseña.';
 
     try {
-        if (!correo || !manzana || !villa || !nuevaContrasena || !confirmarContrasena) {
-            return res.status(400).json({ mensaje: 'Todos los campos son obligatorios' });
+        if (!correo) {
+            return res.status(400).json({ mensaje: 'El correo es obligatorio' });
         }
 
         if (estaBloqueado(ip, correo)) {
             return res.status(429).json({ mensaje: 'Demasiados intentos. Intenta de nuevo en unos minutos.' });
         }
 
+        registrarIntentoFallido(ip, correo);
+
+        const usuario = await prisma.user.findFirst({
+            where: { email: { equals: correo.trim(), mode: 'insensitive' } }
+        });
+
+        if (usuario) {
+            await prisma.tokenRecuperacion.updateMany({
+                where: { usuarioId: usuario.id, usado: false },
+                data: { usado: true }
+            });
+
+            const token = crypto.randomBytes(32).toString('hex');
+            const expiraEn = new Date(Date.now() + 60 * 60 * 1000);
+
+            await prisma.tokenRecuperacion.create({
+                data: { token, usuarioId: usuario.id, expiraEn }
+            });
+
+            await enviarCorreoRecuperacion(usuario, token);
+        }
+
+        return res.status(200).json({ mensaje: MENSAJE_GENERICO });
+    }
+    catch (error) {
+        console.error('Error al solicitar recuperación de contraseña:', error);
+        return res.status(200).json({ mensaje: MENSAJE_GENERICO });
+    }
+}
+
+const restablecerContrasena = async (req, res) => {
+    const { token, nuevaContrasena, confirmarContrasena } = req.body;
+
+    try {
+        if (!token || !nuevaContrasena || !confirmarContrasena) {
+            return res.status(400).json({ mensaje: 'Todos los campos son obligatorios' });
+        }
+
         if (nuevaContrasena !== confirmarContrasena) {
             return res.status(400).json({ mensaje: 'Las contraseñas no coinciden' });
         }
 
-        const usuario = await prisma.user.findFirst({
-            where: {
-                email: { equals: correo.trim(), mode: 'insensitive' },
-                manzana: { equals: manzana.trim(), mode: 'insensitive' },
-                villa: { equals: villa.trim(), mode: 'insensitive' }
-            }
+        const tokenRecuperacion = await prisma.tokenRecuperacion.findUnique({
+            where: { token },
+            include: { usuario: true }
         });
 
-        if (!usuario) {
-            registrarIntentoFallido(ip, correo);
-            return res.status(400).json({ mensaje: 'Los datos no coinciden con ninguna cuenta registrada.' });
+        if (!tokenRecuperacion || tokenRecuperacion.usado || tokenRecuperacion.expiraEn < new Date()) {
+            return res.status(400).json({ mensaje: 'El enlace no es válido o ha expirado. Solicita uno nuevo.' });
         }
 
-        const esIgualALaActual = await bcryptjs.compare(nuevaContrasena, usuario.password);
+        const esIgualALaActual = await bcryptjs.compare(nuevaContrasena, tokenRecuperacion.usuario.password);
         if (esIgualALaActual) {
             return res.status(400).json({ mensaje: 'La nueva contraseña debe ser diferente a la actual.' });
         }
 
         const hash = await bcryptjs.hash(nuevaContrasena, 10);
-        await prisma.user.update({
-            where: { id: usuario.id },
-            data: { password: hash }
-        });
 
-        limpiarIntentos(ip, correo);
+        await prisma.$transaction([
+            prisma.user.update({ where: { id: tokenRecuperacion.usuarioId }, data: { password: hash } }),
+            prisma.tokenRecuperacion.update({ where: { id: tokenRecuperacion.id }, data: { usado: true } })
+        ]);
+
+        limpiarIntentos(req.ip, tokenRecuperacion.usuario.email);
 
         return res.status(200).json({ mensaje: 'Contraseña actualizada correctamente.' });
     }
     catch (error) {
-        console.error('Error al recuperar contraseña:', error);
+        console.error('Error al restablecer contraseña:', error);
         return res.status(500).json({ mensaje: 'Error interno del servidor' });
     }
 }
@@ -357,7 +395,8 @@ const cambiarEmail = async (req, res) => {
 module.exports = {
     registrar,
     login,
-    recuperarContrasena,
+    solicitarRecuperacion,
+    restablecerContrasena,
     obtenerPerfil ,
     editarPerfil,
     cambiarPassword,
