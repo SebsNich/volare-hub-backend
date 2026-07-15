@@ -15,7 +15,9 @@ const app = express();
 
 const origenesPermitidos = [
     'http://localhost:5173',
-    'https://volare-hub-frontend-theta.vercel.app'
+    'https://volare-hub-frontend-theta.vercel.app',
+    'https://urbvolare.com',
+    'https://www.urbvolare.com'
 ]
 
 app.use(cors({
