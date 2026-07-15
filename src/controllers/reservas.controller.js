@@ -1,6 +1,7 @@
 const prisma = require('../lib/prisma');
 const { subirArchivo, eliminarArchivo } = require('../lib/cloudinary');
 const { esCedulaValida } = require('../lib/validadores');
+const { obtenerParametrosPaginacion } = require('../lib/paginacion');
 const {
     CABANAS,
     esCabana,
@@ -42,6 +43,13 @@ function parseArrayExistente(valor) {
     } catch {
         return Array.isArray(valor) ? valor : [valor];
     }
+}
+
+function filtroRangoFecha(fecha) {
+    const inicio = new Date(fecha);
+    const fin = new Date(inicio);
+    fin.setUTCDate(fin.getUTCDate() + 1);
+    return { gte: inicio, lt: fin };
 }
 
 function datosTercero(espacio, esParaTerceroBool, terceroNombre, terceroCedula, terceroCorreo, terceroCelular) {
@@ -379,11 +387,28 @@ const editarReserva = async (req, res) => {
 
 const obtenerMisReservas = async (req, res) => {
     try {
-        const reservas = await prisma.reserva.findMany({
-            where: { usuarioId: req.user.id },
-            orderBy: { fecha: 'desc' }
-        });
-        res.status(200).json(reservas);
+        const { espacio, estado, fecha } = req.query;
+        const { skip, take, pagina } = obtenerParametrosPaginacion(req.query);
+
+        const filtros = [{ usuarioId: req.user.id }];
+        if (espacio && espacio !== 'TODOS') filtros.push({ espacio });
+        if (estado && estado !== 'TODOS') filtros.push({ estado });
+        if (fecha) filtros.push({ fecha: filtroRangoFecha(fecha) });
+
+        const where = { AND: filtros };
+
+        const [reservas, total] = await Promise.all([
+            prisma.reserva.findMany({
+                where,
+                orderBy: { fecha: 'desc' },
+                skip,
+                take
+            }),
+            prisma.reserva.count({ where })
+        ]);
+
+        const totalPaginas = Math.max(1, Math.ceil(total / take));
+        res.status(200).json({ reservas, totalPaginas, paginaActual: pagina });
     }
     catch (error) {
         console.error('Error al obtener mis reservas:', error);
@@ -393,15 +418,43 @@ const obtenerMisReservas = async (req, res) => {
 
 const obtenerReservas = async (req, res) => {
     try {
-        const reservas = await prisma.reserva.findMany({
-            orderBy: { creadoEn: 'desc' },
-            include: {
+        const { busqueda, espacio, estado, fecha } = req.query;
+        const { skip, take, pagina } = obtenerParametrosPaginacion(req.query);
+
+        const filtros = [];
+        if (busqueda) {
+            filtros.push({
                 usuario: {
-                    select: { id: true, nombres: true, apellidos: true, email: true, manzana: true, villa: true, foto: true }
+                    OR: [
+                        { nombres: { contains: busqueda, mode: 'insensitive' } },
+                        { apellidos: { contains: busqueda, mode: 'insensitive' } }
+                    ]
                 }
-            }
-        });
-        res.status(200).json(reservas);
+            });
+        }
+        if (espacio && espacio !== 'TODOS') filtros.push({ espacio });
+        if (estado && estado !== 'TODOS') filtros.push({ estado });
+        if (fecha) filtros.push({ fecha: filtroRangoFecha(fecha) });
+
+        const where = filtros.length ? { AND: filtros } : {};
+
+        const [reservas, total] = await Promise.all([
+            prisma.reserva.findMany({
+                where,
+                orderBy: { creadoEn: 'desc' },
+                skip,
+                take,
+                include: {
+                    usuario: {
+                        select: { id: true, nombres: true, apellidos: true, email: true, manzana: true, villa: true, foto: true }
+                    }
+                }
+            }),
+            prisma.reserva.count({ where })
+        ]);
+
+        const totalPaginas = Math.max(1, Math.ceil(total / take));
+        res.status(200).json({ reservas, totalPaginas, paginaActual: pagina });
     }
     catch (error) {
         console.error('Error al obtener reservas:', error);

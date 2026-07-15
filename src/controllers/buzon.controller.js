@@ -1,4 +1,5 @@
 const prisma = require('../lib/prisma');
+const { obtenerParametrosPaginacion } = require('../lib/paginacion');
 
 const enviarSugerencia = async (req, res) => {
     const {nombre, manzana, villa, tipo, mensaje} = req.body;
@@ -26,12 +27,34 @@ const enviarSugerencia = async (req, res) => {
 
 const obtenerSugerencias  = async (req, res) => {
     try {
-        const sugerencias = await prisma.suggestion.findMany({
-            orderBy: {
-                creadoEn: 'desc'
-            }
-        });
-        res.status(200).json(sugerencias);
+        const { busqueda, tipo, archivadas } = req.query;
+        const { skip, take, pagina } = obtenerParametrosPaginacion(req.query);
+
+        const filtros = [];
+        if (busqueda) {
+            filtros.push({ nombre: { contains: busqueda, mode: 'insensitive' } });
+        }
+        if (tipo && tipo !== 'TODOS') {
+            filtros.push({ tipo });
+        }
+        if (archivadas !== 'true') {
+            filtros.push({ estado: { not: 'ARCHIVADA' } });
+        }
+
+        const where = filtros.length ? { AND: filtros } : {};
+
+        const [sugerencias, total] = await Promise.all([
+            prisma.suggestion.findMany({
+                where,
+                orderBy: { creadoEn: 'desc' },
+                skip,
+                take
+            }),
+            prisma.suggestion.count({ where })
+        ]);
+
+        const totalPaginas = Math.max(1, Math.ceil(total / take));
+        res.status(200).json({ sugerencias, totalPaginas, paginaActual: pagina });
     }
     catch (error) {
         console.error('Error al obtener sugerencias:', error);

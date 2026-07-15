@@ -1,5 +1,6 @@
 const prisma = require('../lib/prisma');
 const bcryptjs = require('bcryptjs');
+const { obtenerParametrosPaginacion } = require('../lib/paginacion');
 
 const obtenerPerfilPublico = async (req, res) => {
     try {
@@ -46,24 +47,58 @@ const obtenerPerfilPublico = async (req, res) => {
 
 const listarUsuarios = async (req, res) => {
     try {
-        const usuarios = await prisma.user.findMany({
-            select: {
-                id: true,
-                nombres: true,
-                apellidos: true,
-                cedula: true,
-                celular: true,
-                email: true,
-                rol: true,
-                activo: true,
-                manzana: true,
-                villa: true,
-                bio: true,
-                foto: true,
-                creadoEn: true
-            }
-        });
-        return res.status(200).json({ mensaje: 'Usuarios listados exitosamente', usuarios: usuarios });
+        const { busqueda, manzanaVilla, estado } = req.query;
+        const { skip, take, pagina } = obtenerParametrosPaginacion(req.query);
+
+        const filtros = [];
+        if (busqueda) {
+            filtros.push({
+                OR: [
+                    { nombres: { contains: busqueda, mode: 'insensitive' } },
+                    { apellidos: { contains: busqueda, mode: 'insensitive' } }
+                ]
+            });
+        }
+        if (manzanaVilla) {
+            filtros.push({
+                OR: [
+                    { manzana: { contains: manzanaVilla, mode: 'insensitive' } },
+                    { villa: { contains: manzanaVilla, mode: 'insensitive' } }
+                ]
+            });
+        }
+        if (estado === 'ACTIVO') filtros.push({ activo: true });
+        if (estado === 'INACTIVO') filtros.push({ activo: false });
+
+        const where = filtros.length ? { AND: filtros } : {};
+
+        const [usuarios, total] = await Promise.all([
+            prisma.user.findMany({
+                where,
+                orderBy: { creadoEn: 'desc' },
+                skip,
+                take,
+                select: {
+                    id: true,
+                    nombres: true,
+                    apellidos: true,
+                    cedula: true,
+                    celular: true,
+                    email: true,
+                    rol: true,
+                    activo: true,
+                    manzana: true,
+                    villa: true,
+                    bio: true,
+                    foto: true,
+                    creadoEn: true
+                }
+            }),
+            prisma.user.count({ where })
+        ]);
+
+        const totalPaginas = Math.max(1, Math.ceil(total / take));
+        return res.status(200).json({ mensaje: 'Usuarios listados exitosamente', usuarios, totalPaginas, paginaActual: pagina });
     } catch (error) {
         console.error('Error al listar usuarios:', error);
         return res.status(500).json({ mensaje: 'Error interno del servidor' });

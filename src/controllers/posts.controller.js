@@ -1,5 +1,6 @@
 const prisma = require('../lib/prisma');
 const { subirArchivo, eliminarArchivo, extraerPublicId } = require('../lib/cloudinary')
+const { obtenerParametrosPaginacion } = require('../lib/paginacion');
 
 const crearPost = async (req, res) => {
     const { titulo, descripcion, tipo, anclado, ancladoPerfil } = req.body;
@@ -53,16 +54,22 @@ const crearPost = async (req, res) => {
 
 const obtenerPosts = async (req, res) => {
     try {
+        const { skip, take } = obtenerParametrosPaginacion({ pagina: req.query.pagina });
+
         const posts = await prisma.post.findMany({
             where: { estado: 'ACTIVO' },
             orderBy: [{ anclado: 'desc' }, { creadoEn: 'desc' }],
+            skip,
+            take: take + 1,
             include: {
                 autor: {
                     select: { nombres: true, apellidos: true, foto: true }
                 }
             }
         })
-        res.json(posts);
+
+        const hayMas = posts.length > take;
+        res.json({ posts: hayMas ? posts.slice(0, take) : posts, hayMas });
     }
     catch (error) {
         console.error('Error al obtener posts:', error);

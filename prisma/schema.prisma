@@ -26,6 +26,8 @@ model User {
   posts     Post[]
   reservas  Reserva[]
   tokensRecuperacion TokenRecuperacion[]
+
+  @@index([activo])
 }
 
 model TokenRecuperacion {
@@ -56,6 +58,10 @@ model Post {
   creadoEn      DateTime   @default(now())
   autor         User       @relation(fields: [autorId], references: [id])
   autorId       String
+
+  @@index([creadoEn])
+  @@index([tipo])
+  @@index([autorId])
 }
 
 enum TipoPost {
@@ -79,6 +85,10 @@ model Suggestion {
   mensaje   String
   estado    EstadoSugerencia @default(SIN_LEER)
   creadoEn  DateTime         @default(now())
+
+  @@index([creadoEn])
+  @@index([estado])
+  @@index([tipo])
 }
 
 enum TipoSugerencia {
@@ -181,4 +191,9 @@ model Reserva {
 
   creadoEn            DateTime          @default(now())
   actualizadoEn       DateTime          @updatedAt
+
+  @@index([fecha])
+  @@index([estado])
+  @@index([usuarioId])
+  @@index([espacio])
 }
