@@ -424,12 +424,12 @@ const obtenerReservas = async (req, res) => {
         const filtros = [];
         if (busqueda) {
             filtros.push({
-                usuario: {
-                    OR: [
-                        { nombres: { contains: busqueda, mode: 'insensitive' } },
-                        { apellidos: { contains: busqueda, mode: 'insensitive' } }
-                    ]
-                }
+                OR: [
+                    { nombres: { contains: busqueda, mode: 'insensitive' } },
+                    { apellidos: { contains: busqueda, mode: 'insensitive' } },
+                    { usuario: { nombres: { contains: busqueda, mode: 'insensitive' } } },
+                    { usuario: { apellidos: { contains: busqueda, mode: 'insensitive' } } }
+                ]
             });
         }
         if (espacio && espacio !== 'TODOS') filtros.push({ espacio });
@@ -446,7 +446,7 @@ const obtenerReservas = async (req, res) => {
                 take,
                 include: {
                     usuario: {
-                        select: { id: true, nombres: true, apellidos: true, email: true, manzana: true, villa: true, foto: true }
+                        select: { id: true, nombres: true, apellidos: true, email: true, manzana: true, villa: true, foto: true, rol: true }
                     }
                 }
             }),
