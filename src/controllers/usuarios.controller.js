@@ -45,6 +45,40 @@ const obtenerPerfilPublico = async (req, res) => {
     }
 }
 
+const buscarUsuarios = async (req, res) => {
+    try {
+        const q = (req.query.q || '').trim();
+
+        if (q.length < 2) {
+            return res.status(200).json({ usuarios: [] });
+        }
+
+        const usuarios = await prisma.user.findMany({
+            where: {
+                activo: true,
+                OR: [
+                    { nombres: { contains: q, mode: 'insensitive' } },
+                    { apellidos: { contains: q, mode: 'insensitive' } },
+                    { nombre: { contains: q, mode: 'insensitive' } }
+                ]
+            },
+            take: 8,
+            orderBy: { nombres: 'asc' },
+            select: {
+                id: true,
+                nombres: true,
+                apellidos: true,
+                foto: true
+            }
+        });
+
+        return res.status(200).json({ usuarios });
+    } catch (error) {
+        console.error('Error al buscar usuarios:', error);
+        return res.status(500).json({ mensaje: 'Error interno del servidor' });
+    }
+}
+
 const listarUsuarios = async (req, res) => {
     try {
         const { busqueda, manzanaVilla, estado } = req.query;
@@ -198,6 +232,7 @@ const crearAdmin = async (req, res) => {
 
 module.exports = {
     obtenerPerfilPublico,
+    buscarUsuarios,
     listarUsuarios,
     cambiarEstadoUsuario,
     crearAdmin
