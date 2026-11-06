@@ -11,6 +11,7 @@ const adminRoutes = require('./routes/admin.routes')
 const reservasRoutes = require('./routes/reservas.routes')
 const contactoRoutes = require('./routes/contacto.routes')
 const sistemaRoutes = require('./routes/sistema.routes')
+const landingRoutes = require('./routes/landing.routes')
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use('/api/admin', adminRoutes)
 app.use('/api/reservas', reservasRoutes)
 app.use('/api/contacto', contactoRoutes)
 app.use('/api/sistema', sistemaRoutes)
+app.use('/api/landing', landingRoutes)
 
 app.get('/', (req, res) => {
     res.json({ mensaje: 'Bienvenido a la API de Volare Hub' });

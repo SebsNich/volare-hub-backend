@@ -1,6 +1,7 @@
 const prisma = require('../lib/prisma');
 const { subirArchivo, eliminarArchivo, extraerPublicId } = require('../lib/cloudinary')
 const { obtenerParametrosPaginacion } = require('../lib/paginacion');
+const { calcularCambiosAlEditar } = require('../lib/landing.helpers');
 
 const crearPost = async (req, res) => {
     const { titulo, descripcion, tipo, anclado, ancladoPerfil } = req.body;
@@ -174,7 +175,8 @@ const editarPost = async (req, res) => {
                 descripcion,
                 tipo,
                 imagenUrl: [...post.imagenUrl, ...imagenesNuevosUrl],
-                archivoUrl: [...post.archivoUrl, ...archivosNuevosUrl]
+                archivoUrl: [...post.archivoUrl, ...archivosNuevosUrl],
+                ...calcularCambiosAlEditar(post, req.user)
             }
         });
         res.json(postActualizado);
