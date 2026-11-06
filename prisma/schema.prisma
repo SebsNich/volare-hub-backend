@@ -24,6 +24,7 @@ model User {
   creadoEn  DateTime @default(now())
   visitasPerfil Int  @default(0)
   posts     Post[]
+  postsPublicados Post[] @relation("PostPublicadoPor")
   reservas  Reserva[]
   tokensRecuperacion TokenRecuperacion[]
 
@@ -59,9 +60,17 @@ model Post {
   autor         User       @relation(fields: [autorId], references: [id])
   autorId       String
 
+  publico         Boolean   @default(false)
+  enCarrusel      Boolean   @default(false)
+  publicadoPorId  String?
+  publicadoPor    User?     @relation("PostPublicadoPor", fields: [publicadoPorId], references: [id], onDelete: SetNull)
+  publicadoEn     DateTime?
+
   @@index([creadoEn])
   @@index([tipo])
   @@index([autorId])
+  @@index([publico])
+  @@index([enCarrusel])
 }
 
 enum TipoPost {
