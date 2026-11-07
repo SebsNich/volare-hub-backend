@@ -8,7 +8,7 @@ router.post('/', verificarToken, upload.fields([
     { name: 'archivos', maxCount: 10 }
 ]), crearPost)
 router.get('/', verificarToken, obtenerPosts)
-router.get('/:id', obtenerPostPorId)
+router.get('/:id', verificarToken, obtenerPostPorId)
 router.put('/:id', verificarToken, upload.fields([
     { name: 'imagenes', maxCount: 10 },
     { name: 'archivos', maxCount: 10 }
