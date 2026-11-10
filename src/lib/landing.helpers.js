@@ -23,4 +23,30 @@ function calcularCambiosAlEditar(post, usuarioEditor) {
     return {}
 }
 
-module.exports = { aPostPublico, puedeEntrarAlCarrusel, calcularCambiosAlEditar }
+// Recibe "ahora" como parámetro para que la prueba no dependa del reloj.
+function calcularCambiosPublico(post, publico, adminId, ahora) {
+    // Republicar no debe mover la fecha ni el autor original de la publicación.
+    if (publico && post.publico) return {}
+    if (publico) {
+        return { publico: true, publicadoPorId: adminId, publicadoEn: ahora }
+    }
+    // Un post privado no puede quedarse en el carrusel de la landing.
+    return { publico: false, enCarrusel: false, publicadoPorId: null, publicadoEn: null }
+}
+
+// Devuelve el mensaje de error, o null si el cambio es válido.
+function validarCambioCarrusel(post, enCarrusel) {
+    if (!enCarrusel) return null
+    if (!post.publico) return 'Primero marca la publicación como pública para ponerla en el carrusel'
+    if (post.estado !== 'ACTIVO') return 'Solo una publicación activa puede ir al carrusel'
+    if (!post.imagenUrl?.length) return 'La publicación necesita al menos una imagen para ir al carrusel'
+    return null
+}
+
+module.exports = {
+    aPostPublico,
+    puedeEntrarAlCarrusel,
+    calcularCambiosAlEditar,
+    calcularCambiosPublico,
+    validarCambioCarrusel
+}

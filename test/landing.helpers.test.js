@@ -1,6 +1,12 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { aPostPublico, puedeEntrarAlCarrusel, calcularCambiosAlEditar } = require('../src/lib/landing.helpers');
+const {
+    aPostPublico,
+    puedeEntrarAlCarrusel,
+    calcularCambiosAlEditar,
+    calcularCambiosPublico,
+    validarCambioCarrusel
+} = require('../src/lib/landing.helpers');
 
 const postBase = {
     id: 'post-1',
@@ -71,4 +77,45 @@ test('calcularCambiosAlEditar no cambia nada si edita un ADMIN', () => {
 test('calcularCambiosAlEditar no cambia nada si el post ya era privado', () => {
     const cambios = calcularCambiosAlEditar({ ...postBase, publico: false }, { id: 'user-1', rol: 'RESIDENTE' });
     assert.deepEqual(cambios, {});
+});
+
+test('calcularCambiosPublico(true) guarda quién publicó y cuándo', () => {
+    const ahora = new Date('2026-11-09T10:00:00Z');
+    const postPrivado = { ...postBase, publico: false, publicadoPorId: null, publicadoEn: null };
+    const cambios = calcularCambiosPublico(postPrivado, true, 'user-admin', ahora);
+    assert.deepEqual(cambios, { publico: true, publicadoPorId: 'user-admin', publicadoEn: ahora });
+});
+
+test('calcularCambiosPublico(true) no cambia nada si el post ya era público', () => {
+    const cambios = calcularCambiosPublico(postBase, true, 'otro-admin', new Date('2026-12-01'));
+    assert.deepEqual(cambios, {});
+});
+
+test('calcularCambiosPublico(false) saca del carrusel y limpia los datos de publicación', () => {
+    const cambios = calcularCambiosPublico(postBase, false, 'user-admin', new Date());
+    assert.deepEqual(cambios, { publico: false, enCarrusel: false, publicadoPorId: null, publicadoEn: null });
+});
+
+test('validarCambioCarrusel permite sacar del carrusel sin más condiciones', () => {
+    const postPrivadoSinImagen = { ...postBase, publico: false, imagenUrl: [] };
+    assert.equal(validarCambioCarrusel(postPrivadoSinImagen, false), null);
+});
+
+test('validarCambioCarrusel permite meter al carrusel un post público, activo y con imagen', () => {
+    assert.equal(validarCambioCarrusel(postBase, true), null);
+});
+
+test('validarCambioCarrusel rechaza un post que no es público', () => {
+    const error = validarCambioCarrusel({ ...postBase, publico: false }, true);
+    assert.match(error, /pública/);
+});
+
+test('validarCambioCarrusel rechaza un post sin imagen', () => {
+    const error = validarCambioCarrusel({ ...postBase, imagenUrl: [] }, true);
+    assert.match(error, /imagen/);
+});
+
+test('validarCambioCarrusel rechaza un post inactivo', () => {
+    const error = validarCambioCarrusel({ ...postBase, estado: 'INACTIVO' }, true);
+    assert.match(error, /activa/);
 });
