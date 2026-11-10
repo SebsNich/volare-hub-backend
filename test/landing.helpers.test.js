@@ -81,12 +81,18 @@ test('calcularCambiosAlEditar no cambia nada si el post ya era privado', () => {
 
 test('calcularCambiosPublico(true) guarda quién publicó y cuándo', () => {
     const ahora = new Date('2026-11-09T10:00:00Z');
-    const cambios = calcularCambiosPublico(true, 'user-admin', ahora);
+    const postPrivado = { ...postBase, publico: false, publicadoPorId: null, publicadoEn: null };
+    const cambios = calcularCambiosPublico(postPrivado, true, 'user-admin', ahora);
     assert.deepEqual(cambios, { publico: true, publicadoPorId: 'user-admin', publicadoEn: ahora });
 });
 
+test('calcularCambiosPublico(true) no cambia nada si el post ya era público', () => {
+    const cambios = calcularCambiosPublico(postBase, true, 'otro-admin', new Date('2026-12-01'));
+    assert.deepEqual(cambios, {});
+});
+
 test('calcularCambiosPublico(false) saca del carrusel y limpia los datos de publicación', () => {
-    const cambios = calcularCambiosPublico(false, 'user-admin', new Date());
+    const cambios = calcularCambiosPublico(postBase, false, 'user-admin', new Date());
     assert.deepEqual(cambios, { publico: false, enCarrusel: false, publicadoPorId: null, publicadoEn: null });
 });
 

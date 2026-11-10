@@ -24,7 +24,9 @@ function calcularCambiosAlEditar(post, usuarioEditor) {
 }
 
 // Recibe "ahora" como parámetro para que la prueba no dependa del reloj.
-function calcularCambiosPublico(publico, adminId, ahora) {
+function calcularCambiosPublico(post, publico, adminId, ahora) {
+    // Republicar no debe mover la fecha ni el autor original de la publicación.
+    if (publico && post.publico) return {}
     if (publico) {
         return { publico: true, publicadoPorId: adminId, publicadoEn: ahora }
     }

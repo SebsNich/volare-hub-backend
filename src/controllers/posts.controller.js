@@ -276,9 +276,14 @@ const cambiarPublico = async (req, res) => {
             return res.status(404).json({ error: 'Post no encontrado' });
         }
 
+        const cambios = calcularCambiosPublico(post, publico, req.user.id, new Date());
+        if (Object.keys(cambios).length === 0) {
+            return res.json(post);
+        }
+
         const postActualizado = await prisma.post.update({
             where: { id: req.params.id },
-            data: calcularCambiosPublico(publico, req.user.id, new Date())
+            data: cambios
         });
         res.json(postActualizado);
     }
