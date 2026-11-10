@@ -1,0 +1,215 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const {
+    normalizarCodigoCasa,
+    normalizarDireccion,
+    normalizarEmail,
+    contarCuentasEnCasa,
+    alcanzaLimiteCasa,
+    respuestaLoginSegunEstado,
+    evaluarAccesoCuenta,
+    validarDecision,
+    validarMotivoRechazo,
+    cambiosAlAprobar,
+    cambiosAlRechazar,
+    esConflictoDeTransaccion
+} = require('../src/lib/registro.helpers');
+
+const residente = (datos) => ({ rol: 'RESIDENTE', estadoCuenta: 'APROBADA', activo: true, manzana: '01', villa: '02', ...datos });
+
+// --- Normalización de manzana y villa ---
+
+test('normalizarCodigoCasa rellena con cero los números de un dígito', () => {
+    assert.equal(normalizarCodigoCasa('1'), '01');
+    assert.equal(normalizarCodigoCasa('7'), '07');
+});
+
+test('normalizarCodigoCasa deja igual los números que ya tienen dos dígitos', () => {
+    assert.equal(normalizarCodigoCasa('01'), '01');
+    assert.equal(normalizarCodigoCasa('12'), '12');
+});
+
+test('normalizarCodigoCasa recorta espacios antes de rellenar', () => {
+    assert.equal(normalizarCodigoCasa(' 2 '), '02');
+});
+
+test('normalizarCodigoCasa quita ceros sobrantes para que "001" sea "01"', () => {
+    assert.equal(normalizarCodigoCasa('001'), '01');
+    assert.equal(normalizarCodigoCasa('0'), '00');
+});
+
+test('normalizarCodigoCasa no recorta números de tres dígitos', () => {
+    assert.equal(normalizarCodigoCasa('105'), '105');
+});
+
+test('normalizarCodigoCasa pasa las letras a mayúscula sin rellenar', () => {
+    assert.equal(normalizarCodigoCasa('a'), 'A');
+    assert.equal(normalizarCodigoCasa(' b2 '), 'B2');
+});
+
+test('normalizarCodigoCasa devuelve texto vacío si no hay valor', () => {
+    assert.equal(normalizarCodigoCasa(null), '');
+    assert.equal(normalizarCodigoCasa(undefined), '');
+});
+
+test('normalizarDireccion normaliza manzana y villa a la vez', () => {
+    assert.deepEqual(normalizarDireccion(' 1', 'a '), { manzana: '01', villa: 'A' });
+});
+
+test('normalizarEmail recorta espacios y pasa a minúsculas', () => {
+    assert.equal(normalizarEmail('  Ana.Perez@Correo.COM '), 'ana.perez@correo.com');
+});
+
+// --- Límite de 2 cuentas por casa ---
+
+test('contarCuentasEnCasa reconoce datos viejos mal formateados ("2" cuenta como "02")', () => {
+    const usuarios = [residente({ manzana: '1', villa: '2' }), residente({ manzana: '01', villa: '02' })];
+    assert.equal(contarCuentasEnCasa(usuarios, '01', '02'), 2);
+});
+
+test('contarCuentasEnCasa solo cuenta RESIDENTE (los ADMIN no ocupan cupo)', () => {
+    const usuarios = [residente({}), { ...residente({}), rol: 'ADMIN' }];
+    assert.equal(contarCuentasEnCasa(usuarios, '01', '02'), 1);
+});
+
+test('contarCuentasEnCasa cuenta PENDIENTE y APROBADA pero no RECHAZADA', () => {
+    const usuarios = [
+        residente({ estadoCuenta: 'PENDIENTE' }),
+        residente({ estadoCuenta: 'APROBADA' }),
+        residente({ estadoCuenta: 'RECHAZADA' })
+    ];
+    assert.equal(contarCuentasEnCasa(usuarios, '01', '02'), 2);
+});
+
+test('contarCuentasEnCasa no mezcla casas distintas', () => {
+    const usuarios = [residente({ villa: '03' }), residente({ manzana: '02' })];
+    assert.equal(contarCuentasEnCasa(usuarios, '01', '02'), 0);
+});
+
+test('alcanzaLimiteCasa es true desde 2 cuentas', () => {
+    assert.equal(alcanzaLimiteCasa(1), false);
+    assert.equal(alcanzaLimiteCasa(2), true);
+    assert.equal(alcanzaLimiteCasa(3), true);
+});
+
+// --- Login según el estado de la cuenta ---
+
+test('respuestaLoginSegunEstado deja entrar a una cuenta APROBADA', () => {
+    const r = respuestaLoginSegunEstado(residente({}));
+    assert.equal(r.status, 200);
+    assert.equal(r.codigo, null);
+});
+
+test('respuestaLoginSegunEstado deja entrar a una PENDIENTE con aviso', () => {
+    const r = respuestaLoginSegunEstado(residente({ estadoCuenta: 'PENDIENTE' }));
+    assert.equal(r.status, 200);
+    assert.equal(r.codigo, 'CUENTA_PENDIENTE');
+    assert.match(r.mensaje, /pendiente de aprobación/);
+});
+
+test('respuestaLoginSegunEstado rechaza una RECHAZADA y muestra el motivo', () => {
+    const r = respuestaLoginSegunEstado(residente({ estadoCuenta: 'RECHAZADA', motivoRechazo: 'La villa no coincide' }));
+    assert.equal(r.status, 403);
+    assert.equal(r.codigo, 'CUENTA_RECHAZADA');
+    assert.match(r.mensaje, /La villa no coincide/);
+});
+
+test('respuestaLoginSegunEstado revisa activo antes que el estado de la cuenta', () => {
+    const r = respuestaLoginSegunEstado(residente({ activo: false, estadoCuenta: 'PENDIENTE' }));
+    assert.equal(r.status, 403);
+    assert.equal(r.codigo, 'CUENTA_INACTIVA');
+});
+
+// --- Acceso a rutas protegidas (lo usará el middleware verificarEstadoCuenta) ---
+
+test('evaluarAccesoCuenta permite a una cuenta APROBADA y activa', () => {
+    assert.equal(evaluarAccesoCuenta(residente({})), null);
+});
+
+test('evaluarAccesoCuenta bloquea una cuenta con activo=false aunque esté APROBADA', () => {
+    const r = evaluarAccesoCuenta(residente({ activo: false }));
+    assert.equal(r.status, 403);
+    assert.equal(r.codigo, 'CUENTA_INACTIVA');
+});
+
+test('evaluarAccesoCuenta bloquea una PENDIENTE por defecto', () => {
+    const r = evaluarAccesoCuenta(residente({ estadoCuenta: 'PENDIENTE' }));
+    assert.equal(r.status, 403);
+    assert.equal(r.codigo, 'CUENTA_PENDIENTE');
+});
+
+test('evaluarAccesoCuenta deja leer a una PENDIENTE si la ruta lo permite', () => {
+    assert.equal(evaluarAccesoCuenta(residente({ estadoCuenta: 'PENDIENTE' }), { permitirPendiente: true }), null);
+});
+
+test('evaluarAccesoCuenta bloquea una RECHAZADA aunque la ruta permita pendientes', () => {
+    const r = evaluarAccesoCuenta(residente({ estadoCuenta: 'RECHAZADA' }), { permitirPendiente: true });
+    assert.equal(r.status, 403);
+    assert.equal(r.codigo, 'CUENTA_RECHAZADA');
+});
+
+test('evaluarAccesoCuenta responde 401 si el usuario del token ya no existe', () => {
+    const r = evaluarAccesoCuenta(null);
+    assert.equal(r.status, 401);
+});
+
+// --- Decisiones del ADMIN ---
+
+test('validarDecision permite aprobar una PENDIENTE', () => {
+    assert.equal(validarDecision(residente({ estadoCuenta: 'PENDIENTE' }), 'aprobar', 2), null);
+});
+
+test('validarDecision no permite aprobar una cuenta ya APROBADA', () => {
+    const r = validarDecision(residente({}), 'aprobar', 0);
+    assert.equal(r.status, 409);
+    assert.equal(r.codigo, 'YA_DECIDIDA');
+});
+
+test('validarDecision permite aprobar una RECHAZADA si la casa tiene cupo', () => {
+    assert.equal(validarDecision(residente({ estadoCuenta: 'RECHAZADA' }), 'aprobar', 1), null);
+});
+
+test('validarDecision no aprueba una RECHAZADA si la casa ya está llena', () => {
+    const r = validarDecision(residente({ estadoCuenta: 'RECHAZADA' }), 'aprobar', 2);
+    assert.equal(r.status, 409);
+    assert.equal(r.codigo, 'LIMITE_VILLA');
+});
+
+test('validarDecision permite rechazar solo una PENDIENTE', () => {
+    assert.equal(validarDecision(residente({ estadoCuenta: 'PENDIENTE' }), 'rechazar', 0), null);
+    assert.equal(validarDecision(residente({ estadoCuenta: 'APROBADA' }), 'rechazar', 0).codigo, 'YA_DECIDIDA');
+    assert.equal(validarDecision(residente({ estadoCuenta: 'RECHAZADA' }), 'rechazar', 0).codigo, 'YA_DECIDIDA');
+});
+
+test('validarMotivoRechazo exige un motivo con texto', () => {
+    assert.match(validarMotivoRechazo(''), /obligatorio/);
+    assert.match(validarMotivoRechazo('   '), /obligatorio/);
+    assert.match(validarMotivoRechazo(undefined), /obligatorio/);
+});
+
+test('validarMotivoRechazo limita el motivo a 500 caracteres', () => {
+    assert.match(validarMotivoRechazo('a'.repeat(501)), /500/);
+    assert.equal(validarMotivoRechazo('a'.repeat(500)), null);
+});
+
+test('cambiosAlAprobar guarda quién decidió, cuándo y limpia el motivo', () => {
+    const ahora = new Date('2026-11-10T12:00:00Z');
+    assert.deepEqual(cambiosAlAprobar('admin-1', ahora), {
+        estadoCuenta: 'APROBADA', decididoPorId: 'admin-1', fechaDecision: ahora, motivoRechazo: null
+    });
+});
+
+test('cambiosAlRechazar guarda el motivo sin espacios sobrantes', () => {
+    const ahora = new Date('2026-11-10T12:00:00Z');
+    assert.deepEqual(cambiosAlRechazar('admin-1', '  Datos no coinciden  ', ahora), {
+        estadoCuenta: 'RECHAZADA', decididoPorId: 'admin-1', fechaDecision: ahora, motivoRechazo: 'Datos no coinciden'
+    });
+});
+
+// --- Conflicto de la transacción Serializable ---
+
+test('esConflictoDeTransaccion reconoce el código P2034 de Prisma', () => {
+    assert.equal(esConflictoDeTransaccion({ code: 'P2034' }), true);
+    assert.equal(esConflictoDeTransaccion({ code: 'P2002' }), false);
+    assert.equal(esConflictoDeTransaccion(new Error('otro')), false);
+});
