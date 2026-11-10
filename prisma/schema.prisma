@@ -28,7 +28,22 @@ model User {
   reservas  Reserva[]
   tokensRecuperacion TokenRecuperacion[]
 
+  estadoCuenta    EstadoCuenta @default(PENDIENTE)
+  // Guarda al ADMIN que aprobó o rechazó la solicitud de registro.
+  decididoPorId   String?
+  decididoPor     User?        @relation("CuentaDecididaPor", fields: [decididoPorId], references: [id], onDelete: SetNull)
+  cuentasDecididas User[]      @relation("CuentaDecididaPor")
+  fechaDecision   DateTime?
+  motivoRechazo   String?
+
   @@index([activo])
+  @@index([estadoCuenta])
+}
+
+enum EstadoCuenta {
+  PENDIENTE
+  APROBADA
+  RECHAZADA
 }
 
 model TokenRecuperacion {
