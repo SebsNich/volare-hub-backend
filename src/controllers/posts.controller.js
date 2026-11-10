@@ -1,7 +1,7 @@
 const prisma = require('../lib/prisma');
 const { subirArchivo, eliminarArchivo, extraerPublicId } = require('../lib/cloudinary')
 const { obtenerParametrosPaginacion } = require('../lib/paginacion');
-const { calcularCambiosAlEditar } = require('../lib/landing.helpers');
+const { calcularCambiosAlEditar, calcularCambiosPublico, validarCambioCarrusel } = require('../lib/landing.helpers');
 
 const crearPost = async (req, res) => {
     const { titulo, descripcion, tipo, anclado, ancladoPerfil } = req.body;
@@ -262,8 +262,65 @@ const anclarPostPerfil = async (req, res) => {
     }
 }
 
+// Se pide el valor explícito (true/false) en vez de alternar, para que dos clics
+// seguidos o una petición repetida no dejen el post en el estado contrario.
+const cambiarPublico = async (req, res) => {
+    const { publico } = req.body ?? {};
+    if (typeof publico !== 'boolean') {
+        return res.status(400).json({ error: 'El campo "publico" es obligatorio y debe ser true o false' });
+    }
+
+    try {
+        const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+        if (!post) {
+            return res.status(404).json({ error: 'Post no encontrado' });
+        }
+
+        const postActualizado = await prisma.post.update({
+            where: { id: req.params.id },
+            data: calcularCambiosPublico(publico, req.user.id, new Date())
+        });
+        res.json(postActualizado);
+    }
+    catch (error) {
+        console.error('Error al cambiar visibilidad pública del post:', error);
+        res.status(500).json({ error: 'Error al cambiar la visibilidad pública del post' });
+    }
+}
+
+const cambiarCarrusel = async (req, res) => {
+    const { enCarrusel } = req.body ?? {};
+    if (typeof enCarrusel !== 'boolean') {
+        return res.status(400).json({ error: 'El campo "enCarrusel" es obligatorio y debe ser true o false' });
+    }
+
+    try {
+        const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+        if (!post) {
+            return res.status(404).json({ error: 'Post no encontrado' });
+        }
+
+        const errorCarrusel = validarCambioCarrusel(post, enCarrusel);
+        if (errorCarrusel) {
+            return res.status(400).json({ error: errorCarrusel });
+        }
+
+        const postActualizado = await prisma.post.update({
+            where: { id: req.params.id },
+            data: { enCarrusel }
+        });
+        res.json(postActualizado);
+    }
+    catch (error) {
+        console.error('Error al cambiar carrusel del post:', error);
+        res.status(500).json({ error: 'Error al cambiar el carrusel del post' });
+    }
+}
+
 module.exports = {
     crearPost,
+    cambiarPublico,
+    cambiarCarrusel,
     obtenerPosts,
     obtenerPostPorId,
     editarPost,
