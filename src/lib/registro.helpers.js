@@ -47,6 +47,13 @@ function mensajeLimiteCasa(manzana, villa) {
     return `La manzana ${casa.manzana}, villa ${casa.villa} ya tiene ${LIMITE_CUENTAS_POR_CASA} cuentas registradas. Si crees que es un error, contacta a la administración.`
 }
 
+// Variante para el ADMIN: él es la administración, así que no se le pide contactarla.
+// No sugiere desactivar porque una cuenta inactiva sigue ocupando cupo.
+function mensajeLimiteCasaParaAdmin(manzana, villa) {
+    const casa = normalizarDireccion(manzana, villa)
+    return `No se puede aprobar: la manzana ${casa.manzana}, villa ${casa.villa} ya tiene ${LIMITE_CUENTAS_POR_CASA} cuentas de residentes pendientes o aprobadas. Revisa las cuentas de esa casa antes de aprobar esta.`
+}
+
 const RESPUESTAS = {
     inactiva: { status: 403, codigo: 'CUENTA_INACTIVA', mensaje: 'Usuario inactivo. Contacta al administrador.' },
     pendiente: { status: 403, codigo: 'CUENTA_PENDIENTE', mensaje: 'Tu cuenta está pendiente de aprobación. Podrás publicar y reservar cuando un administrador la apruebe.' },
@@ -91,7 +98,7 @@ function validarDecision(usuario, accion, cuentasEnCasa) {
     }
     if (usuario.estadoCuenta === 'APROBADA') return RESPUESTAS.yaDecidida
     if (usuario.estadoCuenta === 'RECHAZADA' && alcanzaLimiteCasa(cuentasEnCasa)) {
-        return { status: 409, codigo: 'LIMITE_VILLA', mensaje: mensajeLimiteCasa(usuario.manzana, usuario.villa) }
+        return { status: 409, codigo: 'LIMITE_VILLA', mensaje: mensajeLimiteCasaParaAdmin(usuario.manzana, usuario.villa) }
     }
     return null
 }

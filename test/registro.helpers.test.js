@@ -6,6 +6,7 @@ const {
     normalizarEmail,
     contarCuentasEnCasa,
     alcanzaLimiteCasa,
+    mensajeLimiteCasa,
     respuestaLoginSegunEstado,
     evaluarAccesoCuenta,
     validarDecision,
@@ -183,6 +184,17 @@ test('validarDecision no aprueba una RECHAZADA si la casa ya está llena', () =>
     const r = validarDecision(residente({ estadoCuenta: 'RECHAZADA' }), 'aprobar', 2);
     assert.equal(r.status, 409);
     assert.equal(r.codigo, 'LIMITE_VILLA');
+});
+
+test('validarDecision da al ADMIN un mensaje de límite pensado para él', () => {
+    const r = validarDecision(residente({ estadoCuenta: 'RECHAZADA', manzana: '7', villa: '3' }), 'aprobar', 2);
+    assert.match(r.mensaje, /manzana 07, villa 03/);
+    assert.match(r.mensaje, /Revisa las cuentas de esa casa/);
+    assert.doesNotMatch(r.mensaje, /contacta a la administración/i);
+});
+
+test('el mensaje de límite del registro sigue indicando al residente que contacte a la administración', () => {
+    assert.match(mensajeLimiteCasa('7', '3'), /contacta a la administración/);
 });
 
 test('validarDecision permite rechazar solo una PENDIENTE', () => {
