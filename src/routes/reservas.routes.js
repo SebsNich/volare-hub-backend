@@ -15,18 +15,22 @@ const {
     obtenerNotificacionesNoLeidas,
     marcarNotificacionesLeidas
 } = require('../controllers/reservas.controller')
+const { verificarEstadoCuenta } = require('../middleware/estadoCuenta.middleware')
+
+// Los servicios (reservas) son solo para cuentas aprobadas y activas.
+const cuentaAprobada = verificarEstadoCuenta()
 
 router.get('/disponibilidad/cabanas', obtenerDisponibilidadCabanas)
 router.get('/disponibilidad/casa-club', obtenerDisponibilidadCasaClub)
-router.post('/', verificarToken, camposArchivosReservas, crearReserva)
-router.get('/mias', verificarToken, obtenerMisReservas)
-router.get('/mias/no-leidas', verificarToken, obtenerNotificacionesNoLeidas)
-router.put('/mias/marcar-leidas', verificarToken, marcarNotificacionesLeidas)
+router.post('/', verificarToken, cuentaAprobada, camposArchivosReservas, crearReserva)
+router.get('/mias', verificarToken, cuentaAprobada, obtenerMisReservas)
+router.get('/mias/no-leidas', verificarToken, cuentaAprobada, obtenerNotificacionesNoLeidas)
+router.put('/mias/marcar-leidas', verificarToken, cuentaAprobada, marcarNotificacionesLeidas)
 router.get('/', verificarToken, verificarAdmin, obtenerReservas)
 router.put('/:id/aprobar', verificarToken, verificarAdmin, aprobarReserva)
 router.put('/:id/rechazar', verificarToken, verificarAdmin, rechazarReserva)
 router.put('/:id/observacion', verificarToken, verificarAdmin, enviarObservacion)
-router.get('/:id', verificarToken, obtenerReservaPorId)
-router.put('/:id', verificarToken, camposArchivosReservas, editarReserva)
+router.get('/:id', verificarToken, cuentaAprobada, obtenerReservaPorId)
+router.put('/:id', verificarToken, cuentaAprobada, camposArchivosReservas, editarReserva)
 
 module.exports = router
