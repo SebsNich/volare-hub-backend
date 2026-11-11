@@ -205,7 +205,12 @@ const crearAdmin = async (req, res) => {
                 villa: villa,
                 email: email,
                 password: hash,
-                rol: 'ADMIN'
+                rol: 'ADMIN',
+                // Un admin creado por otro admin ya está verificado; sin esto
+                // nacería PENDIENTE (el default de los registros nuevos).
+                estadoCuenta: 'APROBADA',
+                decididoPorId: req.user.id,
+                fechaDecision: new Date()
             },
             select: {
                 id: true,
