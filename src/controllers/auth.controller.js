@@ -7,6 +7,7 @@ const { estaBloqueado, registrarIntentoFallido, limpiarIntentos } = require('../
 const { esCedulaValida } = require('../lib/validadores');
 const { enviarCorreoRecuperacion } = require('../lib/resend');
 const { ejecutarConReintentos } = require('../lib/reintentos');
+const { buscarResidentesQueOcupanCupo } = require('../lib/residentes');
 const {
     normalizarEmail,
     normalizarDireccion,
@@ -39,10 +40,7 @@ async function crearCuentaPendiente(tx, datos) {
     const duplicado = respuestaDuplicado({ porEmail, porCedula });
     if (duplicado) return { error: duplicado };
 
-    const residentes = await tx.user.findMany({
-        where: { rol: 'RESIDENTE', estadoCuenta: { in: ['PENDIENTE', 'APROBADA'] } },
-        select: { rol: true, estadoCuenta: true, manzana: true, villa: true }
-    });
+    const residentes = await buscarResidentesQueOcupanCupo(tx);
     if (alcanzaLimiteCasa(contarCuentasEnCasa(residentes, datos.manzana, datos.villa))) {
         return { error: { status: 409, codigo: 'LIMITE_VILLA', mensaje: mensajeLimiteCasa(datos.manzana, datos.villa) } };
     }

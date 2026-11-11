@@ -30,6 +30,14 @@ function contarCuentasEnCasa(usuarios, manzana, villa) {
     }).length
 }
 
+// Para que el ADMIN vea, junto a cada solicitud, cuántas cuentas ya ocupan esa casa.
+function agregarCuentasEnCasa(solicitudes, residentes) {
+    return solicitudes.map(solicitud => ({
+        ...solicitud,
+        cuentasEnCasa: contarCuentasEnCasa(residentes, solicitud.manzana, solicitud.villa)
+    }))
+}
+
 function alcanzaLimiteCasa(cantidad) {
     return cantidad >= LIMITE_CUENTAS_POR_CASA
 }
@@ -127,6 +135,7 @@ function esConflictoDeTransaccion(error) {
 
 module.exports = {
     LIMITE_CUENTAS_POR_CASA,
+    ESTADOS_QUE_OCUPAN_CUPO,
     normalizarCodigoCasa,
     normalizarDireccion,
     normalizarEmail,
@@ -140,5 +149,6 @@ module.exports = {
     cambiosAlAprobar,
     cambiosAlRechazar,
     esConflictoDeTransaccion,
-    respuestaDuplicado
+    respuestaDuplicado,
+    agregarCuentasEnCasa
 }

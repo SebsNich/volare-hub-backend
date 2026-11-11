@@ -1,6 +1,38 @@
 const prisma = require('../lib/prisma');
 const bcryptjs = require('bcryptjs');
 const { obtenerParametrosPaginacion } = require('../lib/paginacion');
+const { ejecutarConReintentos } = require('../lib/reintentos');
+const { buscarResidentesQueOcupanCupo } = require('../lib/residentes');
+const {
+    contarCuentasEnCasa,
+    agregarCuentasEnCasa,
+    validarDecision,
+    validarMotivoRechazo,
+    cambiosAlAprobar,
+    cambiosAlRechazar,
+    esConflictoDeTransaccion
+} = require('../lib/registro.helpers');
+
+const CAMPOS_SOLICITUD = {
+    id: true,
+    nombres: true,
+    apellidos: true,
+    cedula: true,
+    celular: true,
+    email: true,
+    rol: true,
+    manzana: true,
+    villa: true,
+    estadoCuenta: true,
+    fechaDecision: true,
+    motivoRechazo: true,
+    creadoEn: true
+};
+
+const NO_ENCONTRADO = { status: 404, codigo: 'USUARIO_NO_ENCONTRADO', mensaje: 'Usuario no encontrado' };
+const YA_DECIDIDA_POR_OTRO = { status: 409, codigo: 'YA_DECIDIDA', mensaje: 'Otro administrador ya decidió esta solicitud. Actualiza la lista.' };
+
+const responderError = (res, { status, codigo, mensaje }) => res.status(status).json({ codigo, mensaje });
 
 const obtenerPerfilPublico = async (req, res) => {
     try {
@@ -235,7 +267,94 @@ const crearAdmin = async (req, res) => {
     }
 }
 
+// Las más antiguas primero: quien lleva más tiempo esperando se atiende antes.
+const listarPendientes = async (req, res) => {
+    try {
+        const { skip, take, pagina } = obtenerParametrosPaginacion(req.query);
+        const where = { estadoCuenta: 'PENDIENTE' };
+
+        const [pendientes, total, residentes] = await Promise.all([
+            prisma.user.findMany({ where, orderBy: [{ creadoEn: 'asc' }, { id: 'asc' }], skip, take, select: CAMPOS_SOLICITUD }),
+            prisma.user.count({ where }),
+            buscarResidentesQueOcupanCupo(prisma)
+        ]);
+
+        const totalPaginas = Math.max(1, Math.ceil(total / take));
+        return res.status(200).json({ usuarios: agregarCuentasEnCasa(pendientes, residentes), total, totalPaginas, paginaActual: pagina });
+    } catch (error) {
+        console.error('Error al listar solicitudes pendientes:', error);
+        return res.status(500).json({ mensaje: 'Error al listar las solicitudes pendientes' });
+    }
+}
+
+// Va en transacción Serializable porque aprobar una RECHAZADA vuelve a ocupar
+// cupo y podría chocar con un registro simultáneo en la misma casa.
+async function aprobarEnTransaccion(tx, id, adminId) {
+    const usuario = await tx.user.findUnique({ where: { id }, select: { rol: true, estadoCuenta: true, manzana: true, villa: true } });
+    if (!usuario) return { error: NO_ENCONTRADO };
+
+    const residentes = await buscarResidentesQueOcupanCupo(tx);
+    const error = validarDecision(usuario, 'aprobar', contarCuentasEnCasa(residentes, usuario.manzana, usuario.villa));
+    if (error) return { error };
+
+    // La condición sobre el estado leído evita pisar la decisión de otro admin.
+    const { count } = await tx.user.updateMany({
+        where: { id, estadoCuenta: usuario.estadoCuenta },
+        data: cambiosAlAprobar(adminId, new Date())
+    });
+    return count === 0 ? { error: YA_DECIDIDA_POR_OTRO } : {};
+}
+
+const aprobarCuenta = async (req, res) => {
+    try {
+        const resultado = await ejecutarConReintentos(
+            () => prisma.$transaction(tx => aprobarEnTransaccion(tx, req.params.id, req.user.id), { isolationLevel: 'Serializable' }),
+            { debeReintentar: esConflictoDeTransaccion }
+        );
+        if (resultado.error) return responderError(res, resultado.error);
+
+        const usuario = await prisma.user.findUnique({ where: { id: req.params.id }, select: CAMPOS_SOLICITUD });
+        return res.status(200).json({ mensaje: 'Cuenta aprobada', usuario });
+    } catch (error) {
+        if (esConflictoDeTransaccion(error)) {
+            return res.status(409).json({ codigo: 'REINTENTAR', mensaje: 'Hubo varias operaciones al mismo tiempo. Intenta de nuevo.' });
+        }
+        console.error('Error al aprobar cuenta:', error);
+        return res.status(500).json({ mensaje: 'Error al aprobar la cuenta' });
+    }
+}
+
+const rechazarCuenta = async (req, res) => {
+    const errorMotivo = validarMotivoRechazo(req.body?.motivo);
+    if (errorMotivo) {
+        return res.status(400).json({ codigo: 'MOTIVO_INVALIDO', mensaje: errorMotivo });
+    }
+
+    try {
+        const usuario = await prisma.user.findUnique({ where: { id: req.params.id }, select: { estadoCuenta: true } });
+        if (!usuario) return responderError(res, NO_ENCONTRADO);
+
+        const error = validarDecision(usuario, 'rechazar', 0);
+        if (error) return responderError(res, error);
+
+        const { count } = await prisma.user.updateMany({
+            where: { id: req.params.id, estadoCuenta: 'PENDIENTE' },
+            data: cambiosAlRechazar(req.user.id, req.body.motivo, new Date())
+        });
+        if (count === 0) return responderError(res, YA_DECIDIDA_POR_OTRO);
+
+        const actualizado = await prisma.user.findUnique({ where: { id: req.params.id }, select: CAMPOS_SOLICITUD });
+        return res.status(200).json({ mensaje: 'Solicitud rechazada', usuario: actualizado });
+    } catch (error) {
+        console.error('Error al rechazar cuenta:', error);
+        return res.status(500).json({ mensaje: 'Error al rechazar la cuenta' });
+    }
+}
+
 module.exports = {
+    listarPendientes,
+    aprobarCuenta,
+    rechazarCuenta,
     obtenerPerfilPublico,
     buscarUsuarios,
     listarUsuarios,

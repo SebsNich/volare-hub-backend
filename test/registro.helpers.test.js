@@ -13,7 +13,8 @@ const {
     cambiosAlAprobar,
     cambiosAlRechazar,
     esConflictoDeTransaccion,
-    respuestaDuplicado
+    respuestaDuplicado,
+    agregarCuentasEnCasa
 } = require('../src/lib/registro.helpers');
 
 const residente = (datos) => ({ rol: 'RESIDENTE', estadoCuenta: 'APROBADA', activo: true, manzana: '01', villa: '02', ...datos });
@@ -85,6 +86,14 @@ test('contarCuentasEnCasa cuenta PENDIENTE y APROBADA pero no RECHAZADA', () => 
 test('contarCuentasEnCasa no mezcla casas distintas', () => {
     const usuarios = [residente({ villa: '03' }), residente({ manzana: '02' })];
     assert.equal(contarCuentasEnCasa(usuarios, '01', '02'), 0);
+});
+
+test('agregarCuentasEnCasa añade a cada solicitud el total de su casa (datos viejos incluidos)', () => {
+    const pendiente = residente({ id: 'p1', estadoCuenta: 'PENDIENTE', manzana: '01', villa: '02' });
+    const residentes = [pendiente, residente({ manzana: '1', villa: '2' }), residente({ manzana: '05', villa: '05' })];
+    const [resultado] = agregarCuentasEnCasa([pendiente], residentes);
+    assert.equal(resultado.id, 'p1');
+    assert.equal(resultado.cuentasEnCasa, 2);
 });
 
 test('alcanzaLimiteCasa es true desde 2 cuentas', () => {
