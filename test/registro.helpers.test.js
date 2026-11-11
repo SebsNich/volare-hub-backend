@@ -12,7 +12,8 @@ const {
     validarMotivoRechazo,
     cambiosAlAprobar,
     cambiosAlRechazar,
-    esConflictoDeTransaccion
+    esConflictoDeTransaccion,
+    respuestaDuplicado
 } = require('../src/lib/registro.helpers');
 
 const residente = (datos) => ({ rol: 'RESIDENTE', estadoCuenta: 'APROBADA', activo: true, manzana: '01', villa: '02', ...datos });
@@ -206,10 +207,57 @@ test('cambiosAlRechazar guarda el motivo sin espacios sobrantes', () => {
     });
 });
 
+// --- Email o cédula ya registrados ---
+
+test('respuestaDuplicado devuelve null si no hay coincidencias', () => {
+    assert.equal(respuestaDuplicado({ porEmail: null, porCedula: null }), null);
+});
+
+test('respuestaDuplicado avisa del email repetido', () => {
+    const r = respuestaDuplicado({ porEmail: residente({}), porCedula: null });
+    assert.equal(r.status, 409);
+    assert.equal(r.codigo, 'EMAIL_DUPLICADO');
+});
+
+test('respuestaDuplicado avisa de la cédula repetida', () => {
+    const r = respuestaDuplicado({ porEmail: null, porCedula: residente({}) });
+    assert.equal(r.status, 409);
+    assert.equal(r.codigo, 'CEDULA_DUPLICADA');
+});
+
+test('respuestaDuplicado da un aviso genérico si la coincidencia es una cuenta RECHAZADA', () => {
+    const rechazada = residente({ estadoCuenta: 'RECHAZADA', motivoRechazo: 'Dato privado' });
+    for (const coincidencia of [{ porEmail: rechazada, porCedula: null }, { porEmail: null, porCedula: rechazada }]) {
+        const r = respuestaDuplicado(coincidencia);
+        assert.equal(r.status, 409);
+        assert.equal(r.codigo, 'SOLICITUD_RECHAZADA');
+        // El motivo solo se muestra tras validar la contraseña en el login.
+        assert.doesNotMatch(r.mensaje, /Dato privado/);
+    }
+});
+
 // --- Conflicto de la transacción Serializable ---
 
 test('esConflictoDeTransaccion reconoce el código P2034 de Prisma', () => {
     assert.equal(esConflictoDeTransaccion({ code: 'P2034' }), true);
     assert.equal(esConflictoDeTransaccion({ code: 'P2002' }), false);
     assert.equal(esConflictoDeTransaccion(new Error('otro')), false);
+});
+
+// Forma real observada con @prisma/adapter-pg: no trae code P2034.
+test('esConflictoDeTransaccion reconoce el conflicto que envía el adaptador de pg', () => {
+    const error = Object.assign(new Error('TransactionWriteConflict'), {
+        name: 'DriverAdapterError',
+        cause: { originalCode: '40001', kind: 'TransactionWriteConflict' }
+    });
+    assert.equal(esConflictoDeTransaccion(error), true);
+});
+
+test('esConflictoDeTransaccion reconoce el código 40001 de Postgres aunque cambie el "kind"', () => {
+    assert.equal(esConflictoDeTransaccion({ cause: { originalCode: '40001' } }), true);
+});
+
+test('esConflictoDeTransaccion no confunde otros errores del adaptador', () => {
+    assert.equal(esConflictoDeTransaccion({ name: 'DriverAdapterError', cause: { originalCode: '23505', kind: 'UniqueConstraintViolation' } }), false);
+    assert.equal(esConflictoDeTransaccion(null), false);
 });

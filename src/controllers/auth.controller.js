@@ -6,54 +6,98 @@ const { subirArchivo, eliminarArchivo } = require('../lib/cloudinary');
 const { estaBloqueado, registrarIntentoFallido, limpiarIntentos } = require('../lib/rateLimiterRecuperacion');
 const { esCedulaValida } = require('../lib/validadores');
 const { enviarCorreoRecuperacion } = require('../lib/resend');
+const { ejecutarConReintentos } = require('../lib/reintentos');
+const {
+    normalizarEmail,
+    normalizarDireccion,
+    contarCuentasEnCasa,
+    alcanzaLimiteCasa,
+    mensajeLimiteCasa,
+    respuestaDuplicado,
+    respuestaLoginSegunEstado,
+    esConflictoDeTransaccion
+} = require('../lib/registro.helpers');
+
+const firmarToken = (usuario) => jwt.sign(
+    { id: usuario.id, rol: usuario.rol },
+    process.env.JWT_SECRET,
+    { expiresIn: '24h' }
+);
+
+const buscarPorEmail = (cliente, email) => cliente.user.findFirst({
+    where: { email: { equals: email, mode: 'insensitive' } }
+});
+
+// Comprueba duplicados y cupo de la casa y crea la cuenta. Va dentro de una
+// transacción Serializable para que dos registros simultáneos en la misma
+// casa no terminen creando 3 cuentas.
+async function crearCuentaPendiente(tx, datos) {
+    const [porEmail, porCedula] = await Promise.all([
+        buscarPorEmail(tx, datos.email),
+        tx.user.findFirst({ where: { cedula: datos.cedula } })
+    ]);
+    const duplicado = respuestaDuplicado({ porEmail, porCedula });
+    if (duplicado) return { error: duplicado };
+
+    const residentes = await tx.user.findMany({
+        where: { rol: 'RESIDENTE', estadoCuenta: { in: ['PENDIENTE', 'APROBADA'] } },
+        select: { rol: true, estadoCuenta: true, manzana: true, villa: true }
+    });
+    if (alcanzaLimiteCasa(contarCuentasEnCasa(residentes, datos.manzana, datos.villa))) {
+        return { error: { status: 409, codigo: 'LIMITE_VILLA', mensaje: mensajeLimiteCasa(datos.manzana, datos.villa) } };
+    }
+
+    const usuario = await tx.user.create({ data: datos });
+    return { usuario };
+}
 
 const registrar = async (req, res) => {
-    const { nombres, apellidos, email, password, cedula, celular, manzana, villa } = req.body;
+    const { nombres, apellidos, password, celular } = req.body;
+    const cedula = String(req.body.cedula ?? '').trim();
+
+    if (!nombres || !apellidos || !req.body.email || !password || !cedula || !celular || !req.body.manzana || !req.body.villa) {
+        return res.status(400).json({ mensaje: 'Todos los campos son obligatorios' })
+    }
+    if (!esCedulaValida(cedula)) {
+        return res.status(400).json({ mensaje: 'La cédula debe tener exactamente 10 dígitos numéricos' });
+    }
+
+    const { manzana, villa } = normalizarDireccion(req.body.manzana, req.body.villa);
 
     try {
-        if (!nombres || !apellidos || !email || !password || !cedula || !celular || !manzana || !villa) {
-            return res.status(400).json({ mensaje: 'Todos los campos son obligatorios' })
-        }
-
-        if (!esCedulaValida(cedula)) {
-            return res.status(400).json({ mensaje: 'La cédula debe tener exactamente 10 dígitos numéricos' });
-        }
-
-        const usuarioExistente = await prisma.user.findUnique({
-            where: {
-                email: email
-            }
-        });
-
-        if (usuarioExistente){
-            return res.status(400).json({ mensaje: 'El email ya está registrado' });
-        }
-
+        // El hash va fuera de la transacción: es lento y no necesita la base.
         const hash = await bcryptjs.hash(password, 10);
+        const datos = {
+            nombre: `${nombres} ${apellidos}`.trim(),
+            nombres, apellidos, cedula, celular, manzana, villa,
+            email: normalizarEmail(req.body.email),
+            password: hash
+        };
 
-        const resultado = await prisma.user.create({
-            data: {
-                nombre: `${nombres} ${apellidos}`.trim(),
-                nombres: nombres,
-                apellidos: apellidos,
-                cedula: cedula,
-                celular: celular,
-                manzana: manzana,
-                villa: villa,
-                email: email,
-                password: hash
-            }
-        });
-
-        const token = jwt.sign(
-            { id: resultado.id, rol: resultado.rol },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
+        const resultado = await ejecutarConReintentos(
+            () => prisma.$transaction(tx => crearCuentaPendiente(tx, datos), { isolationLevel: 'Serializable' }),
+            { debeReintentar: esConflictoDeTransaccion }
         );
 
-        return res.status(201).json({ mensaje: 'Usuario registrado exitosamente', token: token });
+        if (resultado.error) {
+            const { status, codigo, mensaje } = resultado.error;
+            return res.status(status).json({ codigo, mensaje });
+        }
+
+        return res.status(201).json({
+            mensaje: 'Tu cuenta fue creada y está pendiente de aprobación. Mientras tanto, puedes ver las publicaciones.',
+            token: firmarToken(resultado.usuario),
+            estadoCuenta: resultado.usuario.estadoCuenta
+        });
 
     } catch (error) {
+        if (esConflictoDeTransaccion(error)) {
+            return res.status(409).json({ codigo: 'REINTENTAR', mensaje: 'Hubo varias solicitudes al mismo tiempo. Intenta registrarte de nuevo en unos segundos.' });
+        }
+        // P2002: el índice único del email ganó una carrera que la validación no vio.
+        if (error.code === 'P2002') {
+            return res.status(409).json({ codigo: 'EMAIL_DUPLICADO', mensaje: 'El email ya está registrado' });
+        }
         console.error('Error al registrar usuario:', error);
         return res.status(500).json({ mensaje: 'Error interno del servidor' });
     }
@@ -67,11 +111,8 @@ const login = async (req, res) => {
             return res.status(400).json({ mensaje: 'Todos los campos son obligatorios' })
         }
 
-        const usuario = await prisma.user.findUnique({
-            where: {
-                email: email
-            }
-        });
+        // Sin distinguir mayúsculas, para no romper cuentas guardadas antes de normalizar.
+        const usuario = await buscarPorEmail(prisma, normalizarEmail(email));
 
         if (!usuario) {
             return res.status(400).json({ mensaje: 'Credenciales inválidas' });
@@ -83,17 +124,12 @@ const login = async (req, res) => {
             return res.status(400).json({ mensaje: 'Credenciales inválidas' });
         }
 
-        if (!usuario.activo) {
-            return res.status(403).json({ mensaje: 'Usuario inactivo. Contacta al administrador.' });
+        const { status, codigo, mensaje } = respuestaLoginSegunEstado(usuario);
+        if (status !== 200) {
+            return res.status(status).json({ codigo, mensaje });
         }
 
-        const token = jwt.sign(
-            { id: usuario.id, rol: usuario.rol },
-            process.env.JWT_SECRET,
-            { expiresIn: '24h' }
-        );
-
-        return res.status(200).json({ mensaje: 'Inicio de sesión exitoso', token: token });
+        return res.status(200).json({ mensaje, codigo, token: firmarToken(usuario), estadoCuenta: usuario.estadoCuenta });
     }
     catch (error) {
         console.error('Error al iniciar sesión:', error);
@@ -204,6 +240,7 @@ const obtenerPerfil = async (req, res) => {
                 email: true,
                 rol: true,
                 activo: true,
+                estadoCuenta: true,
                 manzana: true,
                 villa: true,
                 bio: true,
@@ -259,6 +296,7 @@ const editarPerfil = async (req, res) => {
                 email: true,
                 rol: true,
                 activo: true,
+                estadoCuenta: true,
                 manzana: true,
                 villa: true,
                 bio: true,
@@ -314,6 +352,7 @@ const cambiarPassword = async (req, res) => {
                 email: true,
                 rol: true,
                 activo: true,
+                estadoCuenta: true,
                 manzana: true,
                 villa: true,
                 bio: true,
@@ -376,6 +415,7 @@ const cambiarEmail = async (req, res) => {
                 email: true,
                 rol: true,
                 activo: true,
+                estadoCuenta: true,
                 manzana: true,
                 villa: true,
                 bio: true,

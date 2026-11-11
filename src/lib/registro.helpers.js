@@ -103,10 +103,26 @@ function cambiosAlRechazar(adminId, motivo, ahora) {
     return { estadoCuenta: 'RECHAZADA', decididoPorId: adminId, fechaDecision: ahora, motivoRechazo: motivo.trim() }
 }
 
-// P2034: Postgres canceló la transacción Serializable porque otra la tocó a la vez.
-// No es un error del usuario: se puede reintentar.
+// Si la coincidencia es una cuenta RECHAZADA, el aviso es genérico: quien
+// escribe esa cédula podría no ser su dueño, y el motivo es privado.
+function respuestaDuplicado({ porEmail, porCedula }) {
+    const coincidencia = porEmail || porCedula
+    if (!coincidencia) return null
+    if (coincidencia.estadoCuenta === 'RECHAZADA') {
+        return { status: 409, codigo: 'SOLICITUD_RECHAZADA', mensaje: 'Ya existe una solicitud con estos datos. Contacta a la administración.' }
+    }
+    if (porEmail) return { status: 409, codigo: 'EMAIL_DUPLICADO', mensaje: 'El email ya está registrado' }
+    return { status: 409, codigo: 'CEDULA_DUPLICADA', mensaje: 'La cédula ya está registrada' }
+}
+
+// Postgres canceló la transacción Serializable porque otra la tocó a la vez.
+// No es un error del usuario: se puede reintentar. Prisma lo informa como P2034,
+// pero con @prisma/adapter-pg llega como DriverAdapterError con el código
+// original de Postgres (40001) en "cause"; se reconocen ambas formas.
 function esConflictoDeTransaccion(error) {
     return error?.code === 'P2034'
+        || error?.cause?.kind === 'TransactionWriteConflict'
+        || error?.cause?.originalCode === '40001'
 }
 
 module.exports = {
@@ -123,5 +139,6 @@ module.exports = {
     validarMotivoRechazo,
     cambiosAlAprobar,
     cambiosAlRechazar,
-    esConflictoDeTransaccion
+    esConflictoDeTransaccion,
+    respuestaDuplicado
 }
