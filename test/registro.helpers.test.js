@@ -125,6 +125,19 @@ test('respuestaLoginSegunEstado rechaza una RECHAZADA y muestra el motivo', () =
     assert.match(r.mensaje, /La villa no coincide/);
 });
 
+test('el mensaje de rechazo no duplica el punto final del motivo', () => {
+    const casos = [
+        ['La villa no coincide', 'Motivo: La villa no coincide. Contacta'],
+        ['La villa no coincide.', 'Motivo: La villa no coincide. Contacta'],
+        ['¿Eres residente?', 'Motivo: ¿Eres residente? Contacta'],
+        ['Faltan datos!', 'Motivo: Faltan datos! Contacta']
+    ];
+    for (const [motivoRechazo, esperado] of casos) {
+        const r = respuestaLoginSegunEstado(residente({ estadoCuenta: 'RECHAZADA', motivoRechazo }));
+        assert.ok(r.mensaje.includes(esperado), `"${motivoRechazo}" produjo: ${r.mensaje}`);
+    }
+});
+
 test('respuestaLoginSegunEstado revisa activo antes que el estado de la cuenta', () => {
     const r = respuestaLoginSegunEstado(residente({ activo: false, estadoCuenta: 'PENDIENTE' }));
     assert.equal(r.status, 403);

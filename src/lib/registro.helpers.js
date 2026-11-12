@@ -61,8 +61,15 @@ const RESPUESTAS = {
     yaDecidida: { status: 409, codigo: 'YA_DECIDIDA', mensaje: 'Esta solicitud ya fue decidida.' }
 }
 
+// El ADMIN escribe el motivo libremente: puede terminarlo o no en punto,
+// así que el punto solo se agrega si falta, para no mostrar "..".
+function cerrarFrase(texto) {
+    const limpio = texto.trim()
+    return /[.!?…]$/.test(limpio) ? limpio : `${limpio}.`
+}
+
 function respuestaRechazada(usuario) {
-    const motivo = usuario.motivoRechazo ? ` Motivo: ${usuario.motivoRechazo}.` : ''
+    const motivo = usuario.motivoRechazo ? ` Motivo: ${cerrarFrase(usuario.motivoRechazo)}` : ''
     return {
         status: 403,
         codigo: 'CUENTA_RECHAZADA',
