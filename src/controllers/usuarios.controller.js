@@ -3,6 +3,7 @@ const bcryptjs = require('bcryptjs');
 const { obtenerParametrosPaginacion } = require('../lib/paginacion');
 const { ejecutarConReintentos } = require('../lib/reintentos');
 const { buscarResidentesQueOcupanCupo } = require('../lib/residentes');
+const { construirFiltroUsuarios } = require('../lib/listadoUsuarios');
 const {
     contarCuentasEnCasa,
     agregarCuentasEnCasa,
@@ -113,30 +114,8 @@ const buscarUsuarios = async (req, res) => {
 
 const listarUsuarios = async (req, res) => {
     try {
-        const { busqueda, manzanaVilla, estado } = req.query;
         const { skip, take, pagina } = obtenerParametrosPaginacion(req.query);
-
-        const filtros = [];
-        if (busqueda) {
-            filtros.push({
-                OR: [
-                    { nombres: { contains: busqueda, mode: 'insensitive' } },
-                    { apellidos: { contains: busqueda, mode: 'insensitive' } }
-                ]
-            });
-        }
-        if (manzanaVilla) {
-            filtros.push({
-                OR: [
-                    { manzana: { contains: manzanaVilla, mode: 'insensitive' } },
-                    { villa: { contains: manzanaVilla, mode: 'insensitive' } }
-                ]
-            });
-        }
-        if (estado === 'ACTIVO') filtros.push({ activo: true });
-        if (estado === 'INACTIVO') filtros.push({ activo: false });
-
-        const where = filtros.length ? { AND: filtros } : {};
+        const where = construirFiltroUsuarios(req.query);
 
         const [usuarios, total] = await Promise.all([
             prisma.user.findMany({
@@ -157,7 +136,10 @@ const listarUsuarios = async (req, res) => {
                     villa: true,
                     bio: true,
                     foto: true,
-                    creadoEn: true
+                    creadoEn: true,
+                    // Para la columna "Cuenta" y para mostrar el motivo al reconsiderar una rechazada.
+                    estadoCuenta: true,
+                    motivoRechazo: true
                 }
             }),
             prisma.user.count({ where })
