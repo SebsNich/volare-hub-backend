@@ -1,6 +1,7 @@
 const prisma = require('../lib/prisma');
 const { subirArchivo, eliminarArchivo, extraerPublicId } = require('../lib/cloudinary')
 const { obtenerParametrosPaginacion } = require('../lib/paginacion');
+const { ORDEN_FEED } = require('../lib/ordenPosts');
 const { calcularCambiosAlEditar, calcularCambiosPublico, validarCambioCarrusel } = require('../lib/landing.helpers');
 
 const crearPost = async (req, res) => {
@@ -59,7 +60,7 @@ const obtenerPosts = async (req, res) => {
 
         const posts = await prisma.post.findMany({
             where: { estado: 'ACTIVO' },
-            orderBy: [{ anclado: 'desc' }, { creadoEn: 'desc' }],
+            orderBy: ORDEN_FEED,
             skip,
             take: take + 1,
             include: {

@@ -7,6 +7,7 @@ const { construirFiltroUsuarios } = require('../lib/listadoUsuarios');
 const { filtroResidentesVisibles, puedeVerPerfil } = require('../lib/visibilidadUsuarios');
 const { FILTRO_SOLICITUDES_PENDIENTES } = require('../lib/resumenAdmin');
 const { validarContrasena } = require('../lib/contrasena');
+const { ORDEN_PERFIL } = require('../lib/ordenPosts');
 const {
     contarCuentasEnCasa,
     agregarCuentasEnCasa,
@@ -75,7 +76,7 @@ const obtenerPerfilPublico = async (req, res) => {
             where: {
                 autorId: req.params.id
             },
-            orderBy: [{ ancladoPerfil: 'desc' }, { creadoEn: 'desc' }],
+            orderBy: ORDEN_PERFIL,
             include: {
                 autor: {
                     select: { nombres: true, apellidos: true, foto: true }
