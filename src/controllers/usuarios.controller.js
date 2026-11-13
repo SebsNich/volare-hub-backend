@@ -5,6 +5,7 @@ const { ejecutarConReintentos } = require('../lib/reintentos');
 const { buscarResidentesQueOcupanCupo } = require('../lib/residentes');
 const { construirFiltroUsuarios } = require('../lib/listadoUsuarios');
 const { filtroResidentesVisibles, puedeVerPerfil } = require('../lib/visibilidadUsuarios');
+const { FILTRO_SOLICITUDES_PENDIENTES } = require('../lib/resumenAdmin');
 const {
     contarCuentasEnCasa,
     agregarCuentasEnCasa,
@@ -270,7 +271,7 @@ const crearAdmin = async (req, res) => {
 const listarPendientes = async (req, res) => {
     try {
         const { skip, take, pagina } = obtenerParametrosPaginacion(req.query);
-        const where = { estadoCuenta: 'PENDIENTE' };
+        const where = FILTRO_SOLICITUDES_PENDIENTES;
 
         const [pendientes, total, residentes] = await Promise.all([
             prisma.user.findMany({ where, orderBy: [{ creadoEn: 'asc' }, { id: 'asc' }], skip, take, select: CAMPOS_SOLICITUD }),
