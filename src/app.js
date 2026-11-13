@@ -13,7 +13,14 @@ const contactoRoutes = require('./routes/contacto.routes')
 const sistemaRoutes = require('./routes/sistema.routes')
 const landingRoutes = require('./routes/landing.routes')
 
+const { saltosDeProxy } = require('./lib/trustProxy')
+
 const app = express();
+
+// Sin esto, en Render req.ip sería la IP del proxy y todos los visitantes
+// compartirían un solo contador de intentos por IP. Ver lib/trustProxy.js.
+const SALTOS_DE_PROXY = saltosDeProxy(process.env)
+app.set('trust proxy', SALTOS_DE_PROXY)
 
 const origenesPermitidos = [
     'http://localhost:5173',
@@ -55,4 +62,6 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en el puerto ${PORT}`);
+    // Queda en los logs de Render para comprobar la configuración desplegada.
+    console.log(`trust proxy: ${SALTOS_DE_PROXY} salto(s)`);
 });
