@@ -6,6 +6,7 @@ const { subirArchivo, eliminarArchivo } = require('../lib/cloudinary');
 const { estaBloqueado, registrarIntentoFallido, limpiarIntentos } = require('../lib/rateLimiterRecuperacion');
 const { esCedulaValida } = require('../lib/validadores');
 const { crearLimitesLogin } = require('../lib/limitesLogin');
+const { validarContrasena } = require('../lib/contrasena');
 const { mensajeDeBloqueo } = require('../lib/limitadorIntentos');
 
 const limitesLogin = crearLimitesLogin();
@@ -62,6 +63,10 @@ const registrar = async (req, res) => {
     }
     if (!esCedulaValida(cedula)) {
         return res.status(400).json({ mensaje: 'La cédula debe tener exactamente 10 dígitos numéricos' });
+    }
+    const errorContrasena = validarContrasena(password);
+    if (errorContrasena) {
+        return res.status(400).json({ mensaje: errorContrasena });
     }
 
     const { manzana, villa } = normalizarDireccion(req.body.manzana, req.body.villa);
@@ -206,6 +211,11 @@ const restablecerContrasena = async (req, res) => {
             return res.status(400).json({ mensaje: 'Las contraseñas no coinciden' });
         }
 
+        const errorContrasena = validarContrasena(nuevaContrasena);
+        if (errorContrasena) {
+            return res.status(400).json({ mensaje: errorContrasena });
+        }
+
         const tokenRecuperacion = await prisma.tokenRecuperacion.findUnique({
             where: { token },
             include: { usuario: true }
@@ -333,6 +343,11 @@ const cambiarPassword = async (req, res) => {
 
         if (!passwordActual || !passwordNuevo) {
             return res.status(400).json({ mensaje: 'Todos los campos son obligatorios' });
+        }
+
+        const errorContrasena = validarContrasena(passwordNuevo);
+        if (errorContrasena) {
+            return res.status(400).json({ mensaje: errorContrasena });
         }
 
         const user = await prisma.user.findUnique({

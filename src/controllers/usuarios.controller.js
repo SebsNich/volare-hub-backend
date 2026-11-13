@@ -6,6 +6,7 @@ const { buscarResidentesQueOcupanCupo } = require('../lib/residentes');
 const { construirFiltroUsuarios } = require('../lib/listadoUsuarios');
 const { filtroResidentesVisibles, puedeVerPerfil } = require('../lib/visibilidadUsuarios');
 const { FILTRO_SOLICITUDES_PENDIENTES } = require('../lib/resumenAdmin');
+const { validarContrasena } = require('../lib/contrasena');
 const {
     contarCuentasEnCasa,
     agregarCuentasEnCasa,
@@ -214,6 +215,11 @@ const crearAdmin = async (req, res) => {
     try {
         if (!nombres || !apellidos || !email || !password) {
             return res.status(400).json({ mensaje: 'Todos los campos son obligatorios' })
+        }
+
+        const errorContrasena = validarContrasena(password);
+        if (errorContrasena) {
+            return res.status(400).json({ mensaje: errorContrasena });
         }
 
         const usuarioExistente = await prisma.user.findUnique({
