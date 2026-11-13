@@ -5,6 +5,10 @@ const jwt = require('jsonwebtoken');
 const { subirArchivo, eliminarArchivo } = require('../lib/cloudinary');
 const { estaBloqueado, registrarIntentoFallido, limpiarIntentos } = require('../lib/rateLimiterRecuperacion');
 const { esCedulaValida } = require('../lib/validadores');
+const { crearLimitesLogin } = require('../lib/limitesLogin');
+const { mensajeDeBloqueo } = require('../lib/limitadorIntentos');
+
+const limitesLogin = crearLimitesLogin();
 const { enviarCorreoRecuperacion } = require('../lib/resend');
 const { ejecutarConReintentos } = require('../lib/reintentos');
 const { buscarResidentesQueOcupanCupo } = require('../lib/residentes');
@@ -109,18 +113,29 @@ const login = async (req, res) => {
             return res.status(400).json({ mensaje: 'Todos los campos son obligatorios' })
         }
 
+        if (typeof email !== 'string' || typeof password !== 'string') {
+            return res.status(400).json({ mensaje: 'Datos inválidos' })
+        }
+
+        // Antes de tocar la base y bcrypt: un bloqueado no gasta CPU ni consultas.
+        const bloqueo = limitesLogin.revisar(req.ip, email);
+        if (bloqueo) {
+            res.set('Retry-After', String(bloqueo.segundosRestantes));
+            return res.status(429).json({ codigo: 'DEMASIADOS_INTENTOS', mensaje: mensajeDeBloqueo(bloqueo.segundosRestantes) });
+        }
+
         // Sin distinguir mayúsculas, para no romper cuentas guardadas antes de normalizar.
         const usuario = await buscarPorEmail(prisma, normalizarEmail(email));
 
-        if (!usuario) {
-            return res.status(400).json({ mensaje: 'Credenciales inválidas' });
-        }
-
-        const passwordValida = await bcryptjs.compare(password, usuario.password);
+        // Un correo inexistente cuenta como fallo igual que una contraseña mala.
+        const passwordValida = usuario ? await bcryptjs.compare(password, usuario.password) : false;
 
         if (!passwordValida) {
+            limitesLogin.registrarFallo(req.ip, email);
             return res.status(400).json({ mensaje: 'Credenciales inválidas' });
         }
+
+        limitesLogin.loginExitoso(email);
 
         const { status, codigo, mensaje } = respuestaLoginSegunEstado(usuario);
         if (status !== 200) {
