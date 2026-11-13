@@ -4,6 +4,7 @@ const { obtenerParametrosPaginacion } = require('../lib/paginacion');
 const { ejecutarConReintentos } = require('../lib/reintentos');
 const { buscarResidentesQueOcupanCupo } = require('../lib/residentes');
 const { construirFiltroUsuarios } = require('../lib/listadoUsuarios');
+const { filtroResidentesVisibles, puedeVerPerfil } = require('../lib/visibilidadUsuarios');
 const {
     contarCuentasEnCasa,
     agregarCuentasEnCasa,
@@ -35,8 +36,20 @@ const YA_DECIDIDA_POR_OTRO = { status: 409, codigo: 'YA_DECIDIDA', mensaje: 'Otr
 
 const responderError = (res, { status, codigo, mensaje }) => res.status(status).json({ codigo, mensaje });
 
+const PERFIL_NO_ENCONTRADO = { error: 'Usuario no encontrado' };
+
 const obtenerPerfilPublico = async (req, res) => {
     try {
+        // Primero se decide si se puede ver y solo después se suma la visita:
+        // un perfil oculto responde igual que uno inexistente y no deja rastro.
+        const perfil = await prisma.user.findUnique({
+            where: { id: req.params.id },
+            select: { id: true, activo: true, estadoCuenta: true }
+        });
+        if (!puedeVerPerfil(perfil, req.user)) {
+            return res.status(404).json(PERFIL_NO_ENCONTRADO);
+        }
+
         const user = await prisma.user.update({
             where:{
                 id: req.params.id
@@ -71,7 +84,7 @@ const obtenerPerfilPublico = async (req, res) => {
     }
     catch (error) {
         if (error.code === 'P2025') {
-            return res.status(404).json({ error: 'Usuario no encontrado' });
+            return res.status(404).json(PERFIL_NO_ENCONTRADO);
         }
         console.error('Error al obtener el perfil público:', error);
         res.status(500).json({ error: 'Error al obtener el perfil público' });
@@ -88,7 +101,7 @@ const buscarUsuarios = async (req, res) => {
 
         const usuarios = await prisma.user.findMany({
             where: {
-                activo: true,
+                ...filtroResidentesVisibles(req.user),
                 OR: [
                     { nombres: { contains: q, mode: 'insensitive' } },
                     { apellidos: { contains: q, mode: 'insensitive' } },
@@ -101,7 +114,11 @@ const buscarUsuarios = async (req, res) => {
                 id: true,
                 nombres: true,
                 apellidos: true,
-                foto: true
+                foto: true,
+                // Para que el admin vea la etiqueta de estado; un residente
+                // solo recibe cuentas aprobadas y activas.
+                activo: true,
+                estadoCuenta: true
             }
         });
 
