@@ -63,7 +63,17 @@ function calcularMontos(espacio, horario, esParaTercero) {
     return { montoAlquiler: alquilerCentavos / 100, montoGarantia: garantiaCentavos / 100 }
 }
 
+// RF-36: la revisión "¿ya existe?" antes de crear no basta si dos residentes envían a la vez.
+// El índice único de la base rechaza al segundo y Prisma lo informa con el código P2002.
+function esConflictoDeUnicidad(error) {
+    return error?.code === 'P2002'
+}
+
+const RESPUESTA_TURNO_OCUPADO = Object.freeze({ status: 409, cuerpo: { error: 'Ese horario ya está reservado' } })
+
 module.exports = {
+    esConflictoDeUnicidad,
+    RESPUESTA_TURNO_OCUPADO,
     CABANAS,
     esCabana,
     obtenerCarpetaReserva,

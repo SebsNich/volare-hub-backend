@@ -8,7 +8,9 @@ const {
     obtenerCarpetaReserva,
     obtenerRangoMes,
     validarDisponibilidadHorario,
-    calcularMontos
+    calcularMontos,
+    esConflictoDeUnicidad,
+    RESPUESTA_TURNO_OCUPADO
 } = require('../lib/reservas.helpers');
 const { tablaTarifas } = require('../lib/tarifas');
 
@@ -250,6 +252,9 @@ const crearReserva = async (req, res) => {
         res.status(201).json(reserva);
     }
     catch (error) {
+        if (esConflictoDeUnicidad(error)) {
+            return res.status(RESPUESTA_TURNO_OCUPADO.status).json(RESPUESTA_TURNO_OCUPADO.cuerpo);
+        }
         console.error('Error al crear reserva:', error);
         res.status(500).json({ error: 'Error al crear reserva' });
     }
