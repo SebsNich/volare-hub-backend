@@ -2,6 +2,7 @@ const router = require('express').Router()
 const { verificarToken, verificarAdmin } = require('../middleware/auth.middleware')
 const { camposArchivosReservas } = require('../lib/multer')
 const {
+    obtenerTarifas,
     obtenerDisponibilidadCabanas,
     obtenerDisponibilidadCasaClub,
     crearReserva,
@@ -20,6 +21,8 @@ const { verificarEstadoCuenta } = require('../middleware/estadoCuenta.middleware
 // Los servicios (reservas) son solo para cuentas aprobadas y activas.
 const cuentaAprobada = verificarEstadoCuenta()
 
+// Antes de '/:id': si no, Express tomaría "tarifas" como el id de una reserva.
+router.get('/tarifas', obtenerTarifas)
 router.get('/disponibilidad/cabanas', obtenerDisponibilidadCabanas)
 router.get('/disponibilidad/casa-club', obtenerDisponibilidadCasaClub)
 router.post('/', verificarToken, cuentaAprobada, camposArchivosReservas, crearReserva)

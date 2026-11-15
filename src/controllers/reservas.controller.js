@@ -10,6 +10,7 @@ const {
     validarDisponibilidadHorario,
     calcularMontos
 } = require('../lib/reservas.helpers');
+const { tablaTarifas } = require('../lib/tarifas');
 
 const ESPACIOS_VALIDOS = ['CABANA_ARBOL', 'CABANA_MEDIO', 'CABANA_RIO', 'CASA_CLUB'];
 const TIPOS_CUENTA_VALIDOS = ['AHORROS', 'CORRIENTE'];
@@ -66,6 +67,11 @@ function datosTercero(espacio, esParaTerceroBool, terceroNombre, terceroCedula, 
     }
 
     return { valido: true, datos: { terceroNombre, terceroCedula, terceroCorreo, terceroCelular } };
+}
+
+// Público, como la disponibilidad: el formulario muestra los precios antes de iniciar sesión.
+const obtenerTarifas = (req, res) => {
+    res.status(200).json({ moneda: 'USD', unidad: 'centavos', tarifas: tablaTarifas() });
 }
 
 const obtenerDisponibilidadCabanas = async (req, res) => {
@@ -553,6 +559,7 @@ const marcarNotificacionesLeidas = async (req, res) => {
 }
 
 module.exports = {
+    obtenerTarifas,
     obtenerDisponibilidadCabanas,
     obtenerDisponibilidadCasaClub,
     crearReserva,

@@ -1,3 +1,5 @@
+const { calcularMontosCentavos } = require('./tarifas')
+
 const CABANAS = ['CABANA_ARBOL', 'CABANA_MEDIO', 'CABANA_RIO']
 const HORARIOS_CASA_CLUB = ['CASA_CLUB_MATUTINO', 'CASA_CLUB_VESPERTINO', 'CASA_CLUB_NOCTURNO']
 
@@ -55,20 +57,10 @@ function obtenerRangoMes(mes) {
     return { inicio, fin }
 }
 
+// La Reserva guarda los montos en dólares (Decimal); los precios salen de tarifas.js.
 function calcularMontos(espacio, horario, esParaTercero) {
-    if (esCabana(espacio)) {
-        return { montoAlquiler: 15, montoGarantia: 25 }
-    }
-
-    if (horario === 'CASA_CLUB_NOCTURNO') {
-        return esParaTercero
-            ? { montoAlquiler: 200, montoGarantia: 200 }
-            : { montoAlquiler: 100, montoGarantia: 100 }
-    }
-
-    return esParaTercero
-        ? { montoAlquiler: 120, montoGarantia: 120 }
-        : { montoAlquiler: 80, montoGarantia: 80 }
+    const { alquilerCentavos, garantiaCentavos } = calcularMontosCentavos(espacio, horario, esParaTercero)
+    return { montoAlquiler: alquilerCentavos / 100, montoGarantia: garantiaCentavos / 100 }
 }
 
 module.exports = {
