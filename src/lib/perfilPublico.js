@@ -16,6 +16,20 @@ const SELECCION_PERFIL_PUBLICO = {
     visitasPerfil: true
 };
 
+// El buscador muestra lo mismo que se ve entre vecinos, sin la bio (una lista
+// corta no la necesita). activo y estadoCuenta quedan para la etiqueta del
+// admin; a un residente solo le llegan cuentas aprobadas y activas.
+const SELECCION_BUSCADOR = {
+    id: true,
+    nombres: true,
+    apellidos: true,
+    foto: true,
+    manzana: true,
+    villa: true,
+    activo: true,
+    estadoCuenta: true
+};
+
 // Rol, manzana y villa no se editan desde el perfil: el rol lo da el admin y la
 // casa cuenta para el límite de 2 cuentas por villa del registro. Por eso se
 // copia solo lo permitido en vez de pasar el body completo a la base.
@@ -29,4 +43,4 @@ function camposEditablesPerfil(body = {}) {
     return datos;
 }
 
-module.exports = { SELECCION_PERFIL_PUBLICO, camposEditablesPerfil };
+module.exports = { SELECCION_PERFIL_PUBLICO, SELECCION_BUSCADOR, camposEditablesPerfil };

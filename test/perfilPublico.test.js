@@ -1,6 +1,23 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { SELECCION_PERFIL_PUBLICO, camposEditablesPerfil } = require('../src/lib/perfilPublico');
+const { SELECCION_PERFIL_PUBLICO, SELECCION_BUSCADOR, camposEditablesPerfil } = require('../src/lib/perfilPublico');
+
+test('el buscador devuelve nombre, foto, manzana y villa de cada resultado', () => {
+    for (const campo of ['id', 'nombres', 'apellidos', 'foto', 'manzana', 'villa']) {
+        assert.equal(SELECCION_BUSCADOR[campo], true, `falta ${campo}`);
+    }
+});
+
+test('el buscador no expone rol, cédula, correo, celular ni bio', () => {
+    for (const campo of ['rol', 'cedula', 'email', 'celular', 'password', 'bio']) {
+        assert.equal(SELECCION_BUSCADOR[campo], undefined, `no debería incluir ${campo}`);
+    }
+});
+
+test('el buscador conserva activo y estadoCuenta para la etiqueta del admin', () => {
+    assert.equal(SELECCION_BUSCADOR.activo, true);
+    assert.equal(SELECCION_BUSCADOR.estadoCuenta, true);
+});
 
 test('el perfil público incluye nombre, foto, manzana y villa', () => {
     for (const campo of ['nombres', 'apellidos', 'foto', 'manzana', 'villa']) {
