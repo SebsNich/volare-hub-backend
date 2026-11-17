@@ -12,6 +12,8 @@ const reservasRoutes = require('./routes/reservas.routes')
 const contactoRoutes = require('./routes/contacto.routes')
 const sistemaRoutes = require('./routes/sistema.routes')
 const landingRoutes = require('./routes/landing.routes')
+const pagosRoutes = require('./routes/pagos.routes')
+const { registroPagos } = require('./lib/pagos/registroActivo')
 
 const { saltosDeProxy } = require('./lib/trustProxy')
 
@@ -49,6 +51,7 @@ app.use('/api/reservas', reservasRoutes)
 app.use('/api/contacto', contactoRoutes)
 app.use('/api/sistema', sistemaRoutes)
 app.use('/api/landing', landingRoutes)
+app.use('/api/pagos', pagosRoutes)
 
 app.get('/', (req, res) => {
     res.json({ mensaje: 'Bienvenido a la API de Volare Hub' });
@@ -64,4 +67,5 @@ app.listen(PORT, () => {
     console.log(`Servidor corriendo en el puerto ${PORT}`);
     // Queda en los logs de Render para comprobar la configuración desplegada.
     console.log(`trust proxy: ${SALTOS_DE_PROXY} salto(s)`);
+    console.log(`pagos: proveedores ${registroPagos.codigos().join(', ')}`);
 });
