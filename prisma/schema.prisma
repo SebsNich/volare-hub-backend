@@ -27,6 +27,8 @@ model User {
   postsPublicados Post[] @relation("PostPublicadoPor")
   reservas  Reserva[]
   tokensRecuperacion TokenRecuperacion[]
+  pagos              Pago[]
+  pagosDecididos     Pago[]  @relation("PagoDecididoPor")
 
   estadoCuenta    EstadoCuenta @default(PENDIENTE)
   // Guarda al ADMIN que aprobó o rechazó la solicitud de registro.
@@ -215,9 +217,64 @@ model Reserva {
 
   creadoEn            DateTime          @default(now())
   actualizadoEn       DateTime          @updatedAt
+  pagos               Pago[]
 
   @@index([fecha])
   @@index([estado])
   @@index([usuarioId])
   @@index([espacio])
+}
+
+// Pagos (RF-39 a RF-42). Por ahora solo reservas: las alícuotas (cuotaId y
+// CuotaAlicuota) llegan en su propia migración.
+enum TipoPago {
+  RESERVA
+  ALICUOTA
+}
+
+enum ConceptoPago {
+  ALQUILER
+  GARANTIA
+  ALICUOTA
+}
+
+enum EstadoPago {
+  PENDIENTE
+  APROBADO
+  RECHAZADO
+  VENCIDO
+  DUPLICADO
+  REVERSADO
+}
+
+model Pago {
+  id                 String       @id @default(uuid())
+  usuarioId          String
+  usuario            User         @relation(fields: [usuarioId], references: [id])
+  tipo               TipoPago
+  concepto           ConceptoPago
+  reservaId          String?
+  reserva            Reserva?     @relation(fields: [reservaId], references: [id], onDelete: Restrict)
+
+  montoCentavos      Int
+  estado             EstadoPago   @default(PENDIENTE)
+
+  proveedor          String
+  idExterno          String?
+  respuestaProveedor Json?
+  evidenciaUrls      String[]     @default([])
+
+  decididoPorId      String?
+  decididoPor        User?        @relation("PagoDecididoPor", fields: [decididoPorId], references: [id], onDelete: SetNull)
+  motivoRechazo      String?
+
+  creadoEn           DateTime     @default(now())
+  venceEn            DateTime?
+  resueltoEn         DateTime?
+  actualizadoEn      DateTime     @updatedAt
+
+  @@unique([proveedor, idExterno])
+  @@index([usuarioId])
+  @@index([estado])
+  @@index([reservaId])
 }
