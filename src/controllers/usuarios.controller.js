@@ -8,6 +8,7 @@ const { filtroResidentesVisibles, puedeVerPerfil } = require('../lib/visibilidad
 const { FILTRO_SOLICITUDES_PENDIENTES } = require('../lib/resumenAdmin');
 const { validarContrasena } = require('../lib/contrasena');
 const { ORDEN_PERFIL } = require('../lib/ordenPosts');
+const { SELECCION_PERFIL_PUBLICO } = require('../lib/perfilPublico');
 const {
     contarCuentasEnCasa,
     agregarCuentasEnCasa,
@@ -61,16 +62,7 @@ const obtenerPerfilPublico = async (req, res) => {
             data: {
                 visitasPerfil: { increment: 1 }
             },
-            select: {
-                id: true,
-                nombres: true,
-                apellidos: true,
-                rol: true,
-                bio: true,
-                foto: true,
-                creadoEn: true,
-                visitasPerfil: true
-            }
+            select: SELECCION_PERFIL_PUBLICO
         });
         const posts = await prisma.post.findMany({
             where: {
