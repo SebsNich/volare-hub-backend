@@ -509,6 +509,10 @@ const aprobarReserva = async (req, res) => {
         res.status(200).json(reserva);
     }
     catch (error) {
+        // RF-36: si la reserva estaba rechazada y otro ya tomó su turno, la base la rechaza.
+        if (esConflictoDeUnicidad(error)) {
+            return res.status(RESPUESTA_TURNO_OCUPADO.status).json(RESPUESTA_TURNO_OCUPADO.cuerpo);
+        }
         console.error('Error al aprobar reserva:', error);
         res.status(500).json({ error: 'Error al aprobar reserva' });
     }

@@ -138,3 +138,80 @@ test('crearReserva: se puede tomar un turno apartado por un pago en línea venci
     assert.equal(res.cuerpo.usuarioId, segundo.id);
     assert.equal((await prisma.reserva.findUnique({ where: { id: vencida.id } })).estado, 'RECHAZADA');
 });
+
+// ---------- RF-36: índice único parcial del turno activo ----------
+
+function pedidoCabana(fecha) {
+    return {
+        espacio: 'CABANA_MEDIO', fecha, horario: 'CABANA_COMPLETO', motivoEvento: 'Cumpleaños',
+        manzana: '01', villa: '02', nombres: 'Prueba', apellidos: 'Turno', correo: 'turno@ejemplo.test',
+        celular: '0999999999', cedula: '0912345678', bancoNombre: 'Banco', numeroCuenta: '123',
+        tipoCuenta: 'AHORROS', cedulaRucBancario: '0912345678'
+    };
+}
+
+// Barrera: retiene la revisión de turno ocupado (findFirst con horario) hasta que
+// lleguen las dos peticiones. Así ambas pasan la revisión del código, como en la
+// peor carrera real, y solo el índice de la base puede detener a la segunda.
+function retenerRevisionDeTurno(cuantas) {
+    const original = prisma.reserva.findFirst;
+    let llegadas = 0;
+    let soltar;
+    const todasLlegaron = new Promise(resolve => { soltar = resolve; });
+    prisma.reserva.findFirst = async (args) => {
+        if (args?.where?.horario) {
+            llegadas += 1;
+            if (llegadas >= cuantas) soltar();
+            await todasLlegaron;
+        }
+        return original.call(prisma.reserva, args);
+    };
+    return () => { prisma.reserva.findFirst = original; };
+}
+
+test('RF-36: dos reservas simultáneas del mismo turno: una 201 y la otra 409, y queda una sola activa', async () => {
+    // 2032-03-13 es sábado. Dos residentes distintos (la regla de una cabaña por residente no interviene).
+    const [a, b] = [await crearUsuario(), await crearUsuario()];
+    const [resA, resB] = [respuestaFalsa(), respuestaFalsa()];
+
+    const restaurar = retenerRevisionDeTurno(2);
+    try {
+        await Promise.all([
+            crearReservaControlador({ user: a, files: {}, body: pedidoCabana('2032-03-13') }, resA),
+            crearReservaControlador({ user: b, files: {}, body: pedidoCabana('2032-03-13') }, resB)
+        ]);
+    } finally {
+        restaurar();
+    }
+
+    const estados = [resA.statusCode, resB.statusCode].sort();
+    assert.deepEqual(estados, [201, 409]);
+    const perdedora = resA.statusCode === 409 ? resA : resB;
+    assert.equal(perdedora.cuerpo.error, 'Ese horario ya está reservado');
+    const activas = await prisma.reserva.count({
+        where: { espacio: 'CABANA_MEDIO', fecha: new Date('2032-03-13T00:00:00.000Z'), estado: { in: ['PENDIENTE', 'APROBADA'] } }
+    });
+    assert.equal(activas, 1);
+});
+
+test('RF-36: la base rechaza un segundo turno activo aunque el código no lo revise (P2002)', async () => {
+    const fecha = new Date('2032-03-20T00:00:00.000Z');
+    await crearReserva(await crearUsuario(), { fecha });
+    await assert.rejects(crearReserva(await crearUsuario(), { fecha }), (error) => error.code === 'P2002');
+});
+
+test('RF-36: una reserva RECHAZADA no ocupa el turno: se puede crear otra activa', async () => {
+    const fecha = new Date('2032-03-27T00:00:00.000Z');
+    await crearReserva(await crearUsuario(), { fecha, estado: 'RECHAZADA' });
+    await crearReserva(await crearUsuario(), { fecha });
+    assert.equal(await prisma.reserva.count({ where: { fecha } }), 2);
+});
+
+test('RF-36: aprobar una reserva rechazada cuyo turno ya tomó otro responde 409, no 500', async () => {
+    const fecha = new Date('2032-04-03T00:00:00.000Z');
+    const vieja = await crearReserva(await crearUsuario(), { fecha, estado: 'RECHAZADA' });
+    await crearReserva(await crearUsuario(), { fecha });
+    const { res, guardada } = await aprobarComoAdmin(vieja);
+    assert.equal(res.statusCode, 409);
+    assert.equal(guardada.estado, 'RECHAZADA');
+});
