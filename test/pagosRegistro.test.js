@@ -47,3 +47,15 @@ test('se puede inyectar un simulado con guion para las pruebas', () => {
     const registro = crearRegistroProveedores({ PAGOS_PROVEEDOR_EN_LINEA: 'SIMULADO' }, { simulado });
     assert.equal(registro.obtener('SIMULADO'), simulado);
 });
+
+test('esPagoEnLinea: el simulado es en línea y la transferencia manual no', () => {
+    const registro = crearRegistroProveedores({ PAGOS_PROVEEDOR_EN_LINEA: 'SIMULADO' });
+    assert.equal(registro.esPagoEnLinea({ proveedor: 'SIMULADO' }), true);
+    assert.equal(registro.esPagoEnLinea({ proveedor: 'TRANSFERENCIA_MANUAL' }), false);
+});
+
+test('esPagoEnLinea: un proveedor que este servidor no conoce cuenta como en línea', () => {
+    // Ejemplo: un pago SIMULADO hecho en desarrollo, leído con el registro sin simulado.
+    const registro = crearRegistroProveedores({});
+    assert.equal(registro.esPagoEnLinea({ proveedor: 'SIMULADO' }), true);
+});

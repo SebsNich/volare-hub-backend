@@ -14,6 +14,8 @@ const {
 } = require('../lib/reservas.helpers');
 const { tablaTarifas } = require('../lib/tarifas');
 const { INCLUIR_PAGOS_PARA_RESUMEN, conEstadoDePago } = require('../lib/pagos/resumenReserva');
+const { puedeAprobarReserva } = require('../lib/pagos/reglasPago');
+const { registroPagos } = require('../lib/pagos/registroActivo');
 
 const ESPACIOS_VALIDOS = ['CABANA_ARBOL', 'CABANA_MEDIO', 'CABANA_RIO', 'CASA_CLUB'];
 const TIPOS_CUENTA_VALIDOS = ['AHORROS', 'CORRIENTE'];
@@ -477,6 +479,19 @@ const obtenerReservas = async (req, res) => {
 
 const aprobarReserva = async (req, res) => {
     try {
+        const actual = await prisma.reserva.findUnique({
+            where: { id: req.params.id },
+            select: { comprobantePagoUrls: true, pagos: { select: { concepto: true, estado: true, proveedor: true } } }
+        });
+        if (!actual) {
+            return res.status(404).json({ error: 'Reserva no encontrada' });
+        }
+
+        const permiso = puedeAprobarReserva({ reserva: actual, pagos: actual.pagos, esEnLinea: registroPagos.esPagoEnLinea });
+        if (!permiso.permitido) {
+            return res.status(409).json({ error: permiso.motivo });
+        }
+
         const reserva = await prisma.reserva.update({
             where: { id: req.params.id },
             data: { estado: 'APROBADA', motivoRechazo: null, notificacionPendiente: true }

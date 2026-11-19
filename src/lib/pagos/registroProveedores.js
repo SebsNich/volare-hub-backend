@@ -43,10 +43,16 @@ function crearRegistroProveedores(env = {}, instancias = {}) {
         registrar(codigoEnLinea === 'SIMULADO' && instancias.simulado ? instancias.simulado : fabrica())
     }
 
+    // Solo la transferencia se declara MANUAL. Un código que este servidor no
+    // conoce cuenta como en línea: así una regla que dependa de esto se
+    // equivoca hacia el lado seguro (pide el pago en vez de saltárselo).
+    const esPagoEnLinea = (pago) => proveedores.get(pago?.proveedor)?.capacidades.tipo !== 'MANUAL'
+
     return {
         codigoEnLinea,
         codigos: () => [...proveedores.keys()],
-        obtener: (codigo) => proveedores.get(codigo) ?? null
+        obtener: (codigo) => proveedores.get(codigo) ?? null,
+        esPagoEnLinea
     }
 }
 

@@ -7,6 +7,7 @@ const {
     respuestaCoincide,
     normalizarVilla,
     referenciaLegible,
+    puedeAprobarReserva,
     MINUTOS_PAGO_EN_LINEA,
     LARGO_MAX_REFERENCIA
 } = require('../src/lib/pagos/reglasPago')
@@ -146,5 +147,55 @@ describe('normalizarVilla y referenciaLegible (prueba 13)', () => {
     })
     test('un concepto desconocido lanza error', () => {
         assert.throws(() => referenciaLegible({ concepto: 'OTRO' }), /Concepto de pago desconocido/)
+    })
+})
+
+describe('puedeAprobarReserva (Bloque E2, decisión 1 ajustada)', () => {
+    const CON_COMPROBANTE = ['https://res.cloudinary.com/demo/comprobante.jpg']
+    // Para la regla, "en línea" es todo lo que no sea la transferencia manual.
+    const esEnLinea = (pago) => pago.proveedor !== 'TRANSFERENCIA_MANUAL'
+    const enLinea = (estado, concepto = 'ALQUILER') => ({ concepto, estado, proveedor: 'SIMULADO' })
+    const manual = (estado, concepto = 'ALQUILER') => ({ concepto, estado, proveedor: 'TRANSFERENCIA_MANUAL' })
+    const aprobar = (pagos, comprobantePagoUrls = []) =>
+        puedeAprobarReserva({ reserva: { comprobantePagoUrls }, pagos, esEnLinea })
+
+    test('reserva antigua: sin pagos y sin comprobante se aprueba como hoy', () => {
+        assert.equal(aprobar([]).permitido, true)
+    })
+    test('sin pagos y con comprobante se aprueba', () => {
+        assert.equal(aprobar([], CON_COMPROBANTE).permitido, true)
+    })
+    test('alquiler en línea APROBADO y sin comprobante se aprueba', () => {
+        assert.equal(aprobar([enLinea('APROBADO')]).permitido, true)
+    })
+    test('alquiler en línea APROBADO y con comprobante se aprueba', () => {
+        assert.equal(aprobar([enLinea('APROBADO')], CON_COMPROBANTE).permitido, true)
+    })
+    test('un intento rechazado y otro aprobado: se aprueba', () => {
+        assert.equal(aprobar([enLinea('RECHAZADO'), enLinea('APROBADO')]).permitido, true)
+    })
+    test('pago en línea PENDIENTE abandonado no bloquea si hay comprobante', () => {
+        assert.equal(aprobar([enLinea('PENDIENTE')], CON_COMPROBANTE).permitido, true)
+    })
+    test('pago en línea RECHAZADO con comprobante se aprueba', () => {
+        assert.equal(aprobar([enLinea('RECHAZADO')], CON_COMPROBANTE).permitido, true)
+    })
+    for (const estado of ['PENDIENTE', 'RECHAZADO', 'VENCIDO', 'DUPLICADO', 'REVERSADO']) {
+        test(`pago en línea ${estado}, ninguno aprobado y sin comprobante: NO se aprueba`, () => {
+            const resultado = aprobar([enLinea(estado)])
+            assert.equal(resultado.permitido, false)
+            assert.match(resultado.motivo, /pago en línea/)
+            assert.match(resultado.motivo, /comprobante/)
+        })
+    }
+    test('solo un pago de transferencia manual (sin pagos en línea) no bloquea', () => {
+        assert.equal(aprobar([manual('PENDIENTE')]).permitido, true)
+    })
+    test('una GARANTIA aprobada no reemplaza al alquiler en línea sin pagar', () => {
+        assert.equal(aprobar([enLinea('PENDIENTE'), manual('APROBADO', 'GARANTIA')]).permitido, false)
+    })
+    test('comprobantePagoUrls ausente cuenta como sin comprobante', () => {
+        const resultado = puedeAprobarReserva({ reserva: {}, pagos: [enLinea('PENDIENTE')], esEnLinea })
+        assert.equal(resultado.permitido, false)
     })
 })

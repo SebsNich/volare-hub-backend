@@ -62,6 +62,23 @@ function puedeConfirmar({ pago, usuario, proveedor }) {
     return false
 }
 
+// Decisión 1 (ajustada en el Bloque E2). Se puede aprobar si se cumple una:
+//   - el ALQUILER tiene un pago APROBADO;
+//   - la reserva tiene comprobante (camino de siempre, aunque haya un intento
+//     en línea abandonado);
+//   - no hay ningún pago en línea (reservas antiguas o solo transferencia).
+// esEnLinea(pago) la pasa quien llama: esta función no conoce proveedores.
+const MOTIVO_FALTA_PAGO = 'Esta reserva tiene un pago en línea sin aprobar y no tiene comprobante. ' +
+    'Espera a que el residente complete el pago o pídele que suba el comprobante.'
+
+function puedeAprobarReserva({ reserva, pagos = [], esEnLinea }) {
+    const alquilerAprobado = pagos.some(pago => pago.concepto === 'ALQUILER' && pago.estado === 'APROBADO')
+    const tieneComprobante = (reserva?.comprobantePagoUrls ?? []).length > 0
+    const tienePagoEnLinea = pagos.some(esEnLinea)
+    if (alquilerAprobado || tieneComprobante || !tienePagoEnLinea) return PERMITIDO
+    return negar(MOTIVO_FALTA_PAGO)
+}
+
 // Si lo que confirmó el proveedor no es exactamente lo que se cobró, no se aplica.
 function respuestaCoincide(pago, respuesta) {
     return respuesta?.idExterno === pago.idExterno && respuesta?.montoCentavos === pago.montoCentavos
@@ -92,6 +109,7 @@ module.exports = {
     puedePagarReserva,
     puedePagarCuota,
     puedeConfirmar,
+    puedeAprobarReserva,
     respuestaCoincide,
     normalizarVilla,
     referenciaLegible
