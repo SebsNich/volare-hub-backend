@@ -34,10 +34,26 @@ describe('conEstadoDePago (Mis Reservas)', () => {
     test('no devuelve la lista de pagos ni cambia los demás campos', () => {
         const resultado = conEstadoDePago({ ...reservaBase, pagos: [{ concepto: 'ALQUILER', estado: 'APROBADO' }] })
         assert.equal('pagos' in resultado, false)
-        assert.deepEqual({ ...resultado, alquilerPagado: undefined }, { ...reservaBase, alquilerPagado: undefined })
+        const { alquilerPagado, transferenciaEnRevision, ...demas } = resultado
+        assert.deepEqual(demas, reservaBase)
     })
 
-    test('la consulta trae solo lo necesario: concepto y estado del pago', () => {
-        assert.deepEqual(INCLUIR_PAGOS_PARA_RESUMEN, { pagos: { select: { concepto: true, estado: true } } })
+    test('la consulta trae solo lo necesario: concepto, estado y proveedor del pago', () => {
+        assert.deepEqual(INCLUIR_PAGOS_PARA_RESUMEN, { pagos: { select: { concepto: true, estado: true, proveedor: true } } })
+    })
+
+    test('transferenciaEnRevision: true con una transferencia de ALQUILER PENDIENTE', () => {
+        const r = conEstadoDePago({ ...reservaBase, pagos: [{ concepto: 'ALQUILER', estado: 'PENDIENTE', proveedor: 'TRANSFERENCIA_MANUAL' }] })
+        assert.equal(r.transferenciaEnRevision, true)
+        assert.equal(r.alquilerPagado, false)
+    })
+
+    test('transferenciaEnRevision: false con un pago en línea pendiente, una transferencia decidida o sin pagos', () => {
+        const con = (pagos) => conEstadoDePago({ ...reservaBase, pagos }).transferenciaEnRevision
+        assert.equal(con([{ concepto: 'ALQUILER', estado: 'PENDIENTE', proveedor: 'SIMULADO' }]), false)
+        assert.equal(con([{ concepto: 'ALQUILER', estado: 'RECHAZADO', proveedor: 'TRANSFERENCIA_MANUAL' }]), false)
+        assert.equal(con([{ concepto: 'ALQUILER', estado: 'APROBADO', proveedor: 'TRANSFERENCIA_MANUAL' }]), false)
+        assert.equal(con([]), false)
+        assert.equal(con(undefined), false)
     })
 })

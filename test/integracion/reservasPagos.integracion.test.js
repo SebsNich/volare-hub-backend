@@ -39,6 +39,21 @@ test('Mis Reservas marca alquilerPagado solo en la reserva con ALQUILER APROBADO
     assert.equal('pagos' in porId[pagada.id], false);
 });
 
+test('Mis Reservas marca transferenciaEnRevision solo con una transferencia PENDIENTE', async () => {
+    const dueno = await crearUsuario();
+    const enRevision = await crearReserva(dueno);
+    const enLinea = await crearReserva(dueno);
+    await crearPago(enRevision, { estado: 'PENDIENTE', proveedor: 'TRANSFERENCIA_MANUAL' });
+    await crearPago(enLinea, { estado: 'PENDIENTE', proveedor: 'SIMULADO' });
+
+    const res = respuestaFalsa();
+    await obtenerMisReservas({ user: dueno, query: {} }, res);
+
+    const porId = Object.fromEntries(res.cuerpo.reservas.map(r => [r.id, r]));
+    assert.equal(porId[enRevision.id].transferenciaEnRevision, true);
+    assert.equal(porId[enLinea.id].transferenciaEnRevision, false);
+});
+
 // ---------- (b) PUT /api/reservas/:id/aprobar ----------
 
 const COMPROBANTE = ['https://res.cloudinary.com/demo/comprobante.jpg'];
