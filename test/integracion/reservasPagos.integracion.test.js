@@ -230,3 +230,28 @@ test('RF-36: aprobar una reserva rechazada cuyo turno ya tomó otro responde 409
     assert.equal(res.statusCode, 409);
     assert.equal(guardada.estado, 'RECHAZADA');
 });
+
+// ---------- RF-52: un admin no puede desactivarse a sí mismo ----------
+
+test('RF-52: PUT /api/usuarios/:id/estado sobre uno mismo responde 409 y la cuenta sigue activa', async () => {
+    const { cambiarEstadoUsuario } = require('../../src/controllers/usuarios.controller');
+    const admin = await crearUsuario('ADMIN');
+    const res = respuestaFalsa();
+    await cambiarEstadoUsuario({ user: admin, params: { id: admin.id }, body: { activo: false } }, res);
+    assert.equal(res.statusCode, 409);
+    assert.equal((await prisma.user.findUnique({ where: { id: admin.id } })).activo, true);
+});
+
+test('RF-52: desactivar a otro usuario sigue funcionando, y un id inexistente responde 404', async () => {
+    const { cambiarEstadoUsuario } = require('../../src/controllers/usuarios.controller');
+    const admin = await crearUsuario('ADMIN');
+    const residente = await crearUsuario();
+    const res = respuestaFalsa();
+    await cambiarEstadoUsuario({ user: admin, params: { id: residente.id }, body: { activo: false } }, res);
+    assert.equal(res.statusCode, 200);
+    assert.equal((await prisma.user.findUnique({ where: { id: residente.id } })).activo, false);
+
+    const res404 = respuestaFalsa();
+    await cambiarEstadoUsuario({ user: admin, params: { id: '00000000-0000-0000-0000-000000000000' }, body: { activo: false } }, res404);
+    assert.equal(res404.statusCode, 404);
+});

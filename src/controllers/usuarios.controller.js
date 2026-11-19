@@ -7,6 +7,7 @@ const { construirFiltroUsuarios } = require('../lib/listadoUsuarios');
 const { filtroResidentesVisibles, puedeVerPerfil } = require('../lib/visibilidadUsuarios');
 const { FILTRO_SOLICITUDES_PENDIENTES } = require('../lib/resumenAdmin');
 const { validarContrasena } = require('../lib/contrasena');
+const { validarCambioEstado } = require('../lib/gestionUsuarios');
 const { ORDEN_PERFIL } = require('../lib/ordenPosts');
 const { SELECCION_PERFIL_PUBLICO, SELECCION_BUSCADOR } = require('../lib/perfilPublico');
 const {
@@ -158,8 +159,13 @@ const listarUsuarios = async (req, res) => {
 
 const cambiarEstadoUsuario = async (req, res) => {
     const { id } = req.params;
-    const { activo } = req.body;
-    
+    const { activo } = req.body ?? {};
+
+    const invalido = validarCambioEstado({ idObjetivo: id, activo, solicitante: req.user });
+    if (invalido) {
+        return res.status(invalido.status).json({ error: invalido.error });
+    }
+
     try {
         const usuario = await prisma.user.update({
             where: {
@@ -188,6 +194,10 @@ const cambiarEstadoUsuario = async (req, res) => {
         res.status(200).json({ mensaje: 'Estado del usuario actualizado exitosamente', usuario })
     }
     catch (error) {
+        // P2025: Prisma no encontró el usuario a actualizar.
+        if (error?.code === 'P2025') {
+            return res.status(404).json({ error: 'Usuario no encontrado' })
+        }
         console.error('Error al cambiar estado:', error)
         res.status(500).json({ error: 'Error al cambiar estado del usuario' })
     }
