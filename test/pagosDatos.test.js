@@ -5,7 +5,10 @@ const {
     validarPedidoConfirmacion,
     armarUrlRetorno,
     venceEnPagoReserva,
-    pagoParaUsuario
+    pagoParaUsuario,
+    validarPedidoTransferencia,
+    validarDecisionManual,
+    MAX_ARCHIVOS_EVIDENCIA
 } = require('../src/lib/pagos/datosPago');
 
 test('un pedido de pago válido devuelve solo reservaId, concepto y proveedor', () => {
@@ -53,4 +56,44 @@ test('al residente no le llega la respuesta del proveedor; al admin sí', () => 
     const pago = { id: 'p1', estado: 'APROBADO', respuestaProveedor: { x: 1 } };
     assert.equal('respuestaProveedor' in pagoParaUsuario(pago, { rol: 'RESIDENTE' }), false);
     assert.deepEqual(pagoParaUsuario(pago, { rol: 'ADMIN' }).respuestaProveedor, { x: 1 });
+});
+
+// ---------- Bloque E2 (c): transferencia manual ----------
+
+const archivo = (mimetype = 'image/jpeg') => ({ buffer: Buffer.from('x'), mimetype, originalname: 'comprobante.jpg' });
+
+test('transferencia válida: devuelve reservaId, concepto ALQUILER y los archivos', () => {
+    const archivos = [archivo(), archivo('application/pdf')];
+    const r = validarPedidoTransferencia({ reservaId: 'r1', concepto: 'ALQUILER', montoCentavos: 1 }, archivos);
+    assert.deepEqual(r, { datos: { reservaId: 'r1', concepto: 'ALQUILER', archivos } });
+});
+
+test('transferencia sin reserva, con otro concepto o sin archivos se rechaza', () => {
+    assert.match(validarPedidoTransferencia({ concepto: 'ALQUILER' }, [archivo()]).error, /reserva/);
+    assert.match(validarPedidoTransferencia({ reservaId: 'r1', concepto: 'GARANTIA' }, [archivo()]).error, /alquiler/);
+    assert.match(validarPedidoTransferencia({ reservaId: 'r1', concepto: 'ALQUILER' }, []).error, /comprobante/);
+    assert.match(validarPedidoTransferencia({ reservaId: 'r1', concepto: 'ALQUILER' }, undefined).error, /comprobante/);
+});
+
+test(`transferencia con más de ${MAX_ARCHIVOS_EVIDENCIA} archivos se rechaza`, () => {
+    const muchos = Array.from({ length: MAX_ARCHIVOS_EVIDENCIA + 1 }, () => archivo());
+    assert.match(validarPedidoTransferencia({ reservaId: 'r1', concepto: 'ALQUILER' }, muchos).error, /máximo/);
+});
+
+test('decisión del admin: APROBAR, con aprobarReserva opcional', () => {
+    assert.deepEqual(validarDecisionManual({ decision: 'APROBAR' }), { datos: { decision: 'APROBAR', motivo: undefined, aprobarReserva: false } });
+    assert.deepEqual(validarDecisionManual({ decision: 'APROBAR', aprobarReserva: true }).datos.aprobarReserva, true);
+});
+
+test('decisión del admin: RECHAZAR exige motivo y lo limpia', () => {
+    assert.match(validarDecisionManual({ decision: 'RECHAZAR' }).error, /motivo/);
+    assert.match(validarDecisionManual({ decision: 'RECHAZAR', motivo: '   ' }).error, /motivo/);
+    assert.deepEqual(validarDecisionManual({ decision: 'RECHAZAR', motivo: '  monto incorrecto ' }).datos,
+        { decision: 'RECHAZAR', motivo: 'monto incorrecto', aprobarReserva: false });
+});
+
+test('decisión del admin: otra decisión o aprobarReserva al rechazar se rechazan', () => {
+    assert.match(validarDecisionManual({ decision: 'TAL_VEZ' }).error, /APROBAR o RECHAZAR/);
+    assert.match(validarDecisionManual({ decision: 'RECHAZAR', motivo: 'x', aprobarReserva: true }).error, /solo al aprobar/);
+    assert.match(validarDecisionManual({ decision: 'APROBAR', aprobarReserva: 'si' }).error, /true o false/);
 });

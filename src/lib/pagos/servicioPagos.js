@@ -3,8 +3,11 @@
 // Recibe prisma y el registro por parámetro para poder probarlo contra volare_test.
 const { siguienteEstado } = require('./estadosPago')
 const { dolaresACentavos } = require('./montos')
-const { puedePagarReserva, puedeConfirmar, respuestaCoincide, referenciaLegible } = require('./reglasPago')
-const { validarPedidoPago, validarPedidoConfirmacion, armarUrlRetorno, venceEnPagoReserva, pagoParaUsuario } = require('./datosPago')
+const { puedePagarReserva, puedeConfirmar, puedeAprobarReserva, respuestaCoincide, referenciaLegible } = require('./reglasPago')
+const {
+    validarPedidoPago, validarPedidoConfirmacion, validarPedidoTransferencia, validarDecisionManual,
+    armarUrlRetorno, venceEnPagoReserva, pagoParaUsuario
+} = require('./datosPago')
 const { ejecutarConReintentos } = require('../reintentos')
 const { esConflictoDeTransaccion } = require('../registro.helpers')
 const { esConflictoDeUnicidad } = require('../reservas.helpers')
@@ -13,12 +16,16 @@ const { esConflictoDeUnicidad } = require('../reservas.helpers')
 const PAGO_NO_ENCONTRADO = Object.freeze({ status: 404, cuerpo: { error: 'Pago no encontrado' } })
 const RESERVA_NO_ENCONTRADA = Object.freeze({ status: 404, cuerpo: { error: 'Reserva no encontrada' } })
 const ESTADOS_ABIERTOS = ['PENDIENTE', 'VENCIDO']
+const CODIGO_TRANSFERENCIA = 'TRANSFERENCIA_MANUAL'
+const TRANSFERENCIA_EN_REVISION = 'Ya enviaste una transferencia para este alquiler. Espera la revisión de la administración.'
 
 const esAdmin = (usuario) => usuario?.rol === 'ADMIN'
 const puedeVer = (registroConDueno, usuario) => Boolean(registroConDueno) && (esAdmin(usuario) || registroConDueno.usuarioId === usuario?.id)
 const error = (status, mensaje, codigo) => ({ status, cuerpo: codigo ? { error: mensaje, codigo } : { error: mensaje } })
 
-function crearServicioPagos({ prisma, registro, urlFrontend, ahora = () => new Date() }) {
+// subirEvidencias(archivos, reserva) → urls. Se inyecta para que las pruebas no
+// llamen a Cloudinary; el controlador pasa la versión real.
+function crearServicioPagos({ prisma, registro, urlFrontend, ahora = () => new Date(), subirEvidencias }) {
 
     const enTransaccion = (operacion) => ejecutarConReintentos(
         () => prisma.$transaction(operacion, { isolationLevel: 'Serializable' }),
@@ -63,6 +70,8 @@ function crearServicioPagos({ prisma, registro, urlFrontend, ahora = () => new D
 
         const permiso = puedePagarReserva({ reserva, usuario, concepto, pagos: reserva.pagos, proveedor, ahora: ahora() })
         if (!permiso.permitido) return error(409, permiso.motivo)
+        // Pagar en línea encima de una transferencia en revisión sería cobrar dos veces.
+        if (transferenciaEnRevision(reserva.pagos, concepto)) return error(409, TRANSFERENCIA_EN_REVISION)
 
         const existente = pagoPendienteReutilizable(reserva.pagos, concepto, codigo)
         if (existente) return { status: 200, cuerpo: await iniciarCobro(proveedor, existente, reserva) }
@@ -80,6 +89,60 @@ function crearServicioPagos({ prisma, registro, urlFrontend, ahora = () => new D
             }
         })
         return { status: 201, cuerpo: await iniciarCobro(proveedor, pago, reserva) }
+    }
+
+    const transferenciaEnRevision = (pagos, concepto) =>
+        pagos.some(pago => pago.concepto === concepto && pago.estado === 'PENDIENTE' && pago.proveedor === CODIGO_TRANSFERENCIA)
+
+    // ---------- registrarTransferencia (Bloque E2 c) ----------
+
+    async function subirSinFallar(archivos, reserva) {
+        try {
+            return { urls: await subirEvidencias(archivos, reserva) }
+        } catch (falla) {
+            console.error('Error al subir la evidencia de la transferencia:', falla)
+            return { error: error(502, 'No se pudo subir el comprobante. Intenta de nuevo.') }
+        }
+    }
+
+    async function registrarTransferencia(usuario, body, archivos) {
+        const pedido = validarPedidoTransferencia(body, archivos)
+        if (pedido.error) return error(400, pedido.error)
+        const { reservaId, concepto } = pedido.datos
+        const proveedor = registro.obtener(CODIGO_TRANSFERENCIA)
+
+        const reserva = await prisma.reserva.findUnique({ where: { id: reservaId }, include: { pagos: true } })
+        if (!reserva || reserva.usuarioId !== usuario.id) return RESERVA_NO_ENCONTRADA
+
+        const permiso = puedePagarReserva({ reserva, usuario, concepto, pagos: reserva.pagos, proveedor, ahora: ahora() })
+        if (!permiso.permitido) return error(409, permiso.motivo)
+        if (transferenciaEnRevision(reserva.pagos, concepto)) return error(409, TRANSFERENCIA_EN_REVISION)
+
+        // Los archivos se suben antes de crear el pago: si la subida falla, no queda
+        // un pago sin evidencia que el admin no podría revisar.
+        const subida = await subirSinFallar(pedido.datos.archivos, reserva)
+        if (subida.error) return subida.error
+
+        const pago = await prisma.pago.create({
+            data: {
+                usuarioId: usuario.id,
+                tipo: 'RESERVA',
+                concepto,
+                reservaId,
+                montoCentavos: dolaresACentavos(reserva.montoAlquiler.toString()),
+                proveedor: CODIGO_TRANSFERENCIA,
+                evidenciaUrls: subida.urls,
+                venceEn: venceEnPagoReserva(reserva, proveedor.capacidades)
+            }
+        })
+        const cobro = await proveedor.crearCobro({
+            pagoId: pago.id,
+            montoCentavos: pago.montoCentavos,
+            referencia: referenciaLegible({ concepto, espacio: reserva.espacio, fecha: reserva.fecha }),
+            urlRetorno: armarUrlRetorno(urlFrontend, pago.id)
+        })
+        const guardado = await prisma.pago.update({ where: { id: pago.id }, data: { idExterno: cobro.idExterno } })
+        return { status: 201, cuerpo: { pago: pagoParaUsuario(guardado, usuario) } }
     }
 
     // ---------- confirmarPago ----------
@@ -168,6 +231,81 @@ function crearServicioPagos({ prisma, registro, urlFrontend, ahora = () => new D
         return vista(await intentarReverso(proveedor, resultado))
     }
 
+    // ---------- decidirPagoManual (Bloque E2 c) ----------
+
+    // Error para deshacer toda la transacción cuando la reserva no se puede aprobar.
+    function noSePuedeAprobar(mensaje) {
+        const falla = new Error(mensaje)
+        falla.codigo = 'RESERVA_NO_APROBABLE'
+        return falla
+    }
+
+    async function aprobarReservaEn(tx, reservaId) {
+        const reserva = await tx.reserva.findUnique({ where: { id: reservaId }, include: { pagos: true } })
+        const permiso = puedeAprobarReserva({ reserva, pagos: reserva.pagos, esEnLinea: registro.esPagoEnLinea })
+        if (!permiso.permitido) throw noSePuedeAprobar(permiso.motivo)
+        const { count } = await tx.reserva.updateMany({
+            where: { id: reservaId, estado: 'PENDIENTE' },
+            data: { estado: 'APROBADA', motivoRechazo: null, notificacionPendiente: true }
+        })
+        if (count === 0) throw noSePuedeAprobar('La reserva ya no está pendiente. No se guardó ningún cambio.')
+    }
+
+    // Decisión 1: pago y reserva en UNA transacción. Si la reserva no se puede
+    // aprobar, se lanza un error y el pago tampoco cambia.
+    function aplicarDecision(pagoId, respuesta, { decididoPorId, aprobarReserva }) {
+        return enTransaccion(async (tx) => {
+            const actual = await tx.pago.findUnique({ where: { id: pagoId } })
+            if (actual.estado !== 'PENDIENTE') return actual
+            const contexto = respuesta.estado === 'APROBADO'
+                ? { referenciaDisponible: await referenciaDisponible(tx, actual) }
+                : undefined
+            const { estado } = siguienteEstado(actual.estado, respuesta.estado, contexto)
+            await tx.pago.updateMany({
+                where: { id: actual.id, estado: actual.estado },
+                data: {
+                    estado,
+                    resueltoEn: ahora(),
+                    respuestaProveedor: respuesta,
+                    decididoPorId,
+                    motivoRechazo: estado === 'RECHAZADO' ? respuesta.detalle.motivo : null
+                }
+            })
+            if (aprobarReserva) {
+                if (estado !== 'APROBADO') {
+                    throw noSePuedeAprobar('El alquiler ya estaba cubierto o la reserva no está pendiente. No se guardó ningún cambio.')
+                }
+                await aprobarReservaEn(tx, actual.reservaId)
+            }
+            return tx.pago.findUnique({ where: { id: actual.id } })
+        })
+    }
+
+    async function decidirPagoManual(usuario, pagoId, body) {
+        const pedido = validarDecisionManual(body)
+        if (pedido.error) return error(400, pedido.error)
+
+        const pago = await prisma.pago.findUnique({ where: { id: pagoId } })
+        if (!puedeVer(pago, usuario)) return PAGO_NO_ENCONTRADO
+        const proveedor = registro.obtener(pago.proveedor)
+        if (proveedor?.capacidades.tipo !== 'MANUAL') return error(409, 'Este pago no es una transferencia')
+        if (!puedeConfirmar({ pago, usuario, proveedor })) return error(403, 'Solo la administración decide las transferencias')
+
+        const vista = (p) => ({ status: 200, cuerpo: { pago: pagoParaUsuario(p, usuario) } })
+        // Idempotencia: una transferencia ya decidida no se vuelve a decidir.
+        if (pago.estado !== 'PENDIENTE') return vista(pago)
+
+        const { decision, motivo, aprobarReserva } = pedido.datos
+        const respuesta = await proveedor.confirmarCobro({ idExterno: pago.idExterno, montoCentavos: pago.montoCentavos, decision, motivo })
+        try {
+            return vista(await aplicarDecision(pago.id, respuesta, { decididoPorId: usuario.id, aprobarReserva }))
+        } catch (falla) {
+            if (falla.codigo === 'RESERVA_NO_APROBABLE') return error(409, falla.message)
+            if (!esConflictoDeUnicidad(falla)) throw falla
+            return vista(await marcarDuplicado(pago.id, respuesta))
+        }
+    }
+
     // ---------- lectura ----------
 
     async function obtenerPago(usuario, pagoId) {
@@ -184,7 +322,7 @@ function crearServicioPagos({ prisma, registro, urlFrontend, ahora = () => new D
         return { status: 200, cuerpo: { pagos: pagos.map(p => pagoParaUsuario(p, usuario)) } }
     }
 
-    return { crearPago, confirmarPago, obtenerPago, listarPagosDeReserva }
+    return { crearPago, confirmarPago, registrarTransferencia, decidirPagoManual, obtenerPago, listarPagosDeReserva }
 }
 
 module.exports = { crearServicioPagos }

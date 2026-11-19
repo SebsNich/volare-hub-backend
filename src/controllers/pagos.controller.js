@@ -1,11 +1,26 @@
 const prisma = require('../lib/prisma');
 const { crearServicioPagos } = require('../lib/pagos/servicioPagos');
 const { registroPagos } = require('../lib/pagos/registroActivo');
+const { subirArchivo } = require('../lib/cloudinary');
+const { obtenerCarpetaReserva } = require('../lib/reservas.helpers');
+
+// Misma carpeta que los comprobantes de la reserva, con prefijo para distinguirlos.
+async function subirEvidencias(archivos, reserva) {
+    const carpeta = obtenerCarpetaReserva(reserva.espacio, 'comprobantes');
+    const subidos = await Promise.all(archivos.map(archivo => subirArchivo(
+        archivo.buffer,
+        carpeta,
+        archivo.mimetype === 'application/pdf' ? 'raw' : 'image',
+        `transferencia-${archivo.originalname}`
+    )));
+    return subidos.map(resultado => resultado.secure_url);
+}
 
 const servicio = crearServicioPagos({
     prisma,
     registro: registroPagos,
-    urlFrontend: process.env.FRONTEND_URL
+    urlFrontend: process.env.FRONTEND_URL,
+    subirEvidencias
 });
 
 // Las reglas viven en el servicio; aquí solo se traduce su { status, cuerpo }
@@ -24,5 +39,7 @@ const crearPago = responder((req) => servicio.crearPago(req.user, req.body));
 const confirmarPago = responder((req) => servicio.confirmarPago(req.user, req.params.id, req.body));
 const obtenerPago = responder((req) => servicio.obtenerPago(req.user, req.params.id));
 const listarPagos = responder((req) => servicio.listarPagosDeReserva(req.user, req.query.reservaId));
+const registrarTransferencia = responder((req) => servicio.registrarTransferencia(req.user, req.body, req.files));
+const decidirPagoManual = responder((req) => servicio.decidirPagoManual(req.user, req.params.id, req.body));
 
-module.exports = { crearPago, confirmarPago, obtenerPago, listarPagos };
+module.exports = { crearPago, confirmarPago, obtenerPago, listarPagos, registrarTransferencia, decidirPagoManual };

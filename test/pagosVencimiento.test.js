@@ -45,6 +45,9 @@ describe('debeVencerReserva (decisiones 2 y 3, Bloque E2)', () => {
         assert.equal(vence({ pagos: [enLinea('RECHAZADO')] }), false)
         assert.equal(vence({ pagos: [enLinea('VENCIDO')] }), false)
     })
+    test('una transferencia PENDIENTE aparta el turno aunque haya un pago en línea abandonado', () => {
+        assert.equal(vence({ pagos: [enLinea('PENDIENTE'), manual('PENDIENTE')] }), false)
+    })
     test('una transferencia manual PENDIENTE no vence nunca', () => {
         assert.equal(vence({ pagos: [manual('PENDIENTE')] }), false)
     })

@@ -30,4 +30,7 @@ const camposArchivosReservas = uploadReservas.fields([
     { name: 'contratoFirmado', maxCount: 5 }
 ])
 
-module.exports = { upload, uploadReservas, camposArchivosReservas }
+// Evidencia de una transferencia manual: mismos formatos y tamaño que los comprobantes.
+const camposEvidenciaTransferencia = uploadReservas.array('evidencia', 5)
+
+module.exports = { upload, uploadReservas, camposArchivosReservas, camposEvidenciaTransferencia }

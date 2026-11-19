@@ -15,12 +15,14 @@ const PLAZO_MS = MINUTOS_PAGO_EN_LINEA * 60 * 1000
 const SELECCION_PAGOS = { select: { id: true, concepto: true, estado: true, proveedor: true } }
 
 // Pura. Vence solo si se cumplen todas: sigue PENDIENTE, no tiene comprobante,
-// no tiene ningún pago APROBADO, le queda un pago en línea PENDIENTE y ya
-// pasaron 15 minutos desde que se creó la reserva.
+// no tiene ningún pago APROBADO ni una transferencia PENDIENTE, le queda un
+// pago en línea PENDIENTE y ya pasaron 15 minutos desde que se creó la reserva.
 function debeVencerReserva({ reserva, pagos = [], esEnLinea, ahora }) {
     if (reserva?.estado !== 'PENDIENTE') return false
     if ((reserva.comprobantePagoUrls ?? []).length > 0) return false
     if (pagos.some(pago => pago.estado === 'APROBADO')) return false
+    // Decisión 2: una transferencia en revisión aparta el turno mientras esté PENDIENTE.
+    if (pagos.some(pago => pago.estado === 'PENDIENTE' && !esEnLinea(pago))) return false
     if (!pagos.some(pago => pago.estado === 'PENDIENTE' && esEnLinea(pago))) return false
     return ahora.getTime() >= new Date(reserva.creadoEn).getTime() + PLAZO_MS
 }

@@ -47,8 +47,41 @@ function pagoParaUsuario(pago, usuario) {
     return resto
 }
 
+// ---------- Bloque E2 (c): transferencia manual ----------
+// Por ahora solo el alquiler: la garantía sigue con el comprobante de la reserva.
+const CONCEPTOS_TRANSFERENCIA = ['ALQUILER']
+const MAX_ARCHIVOS_EVIDENCIA = 5
+const DECISIONES_MANUALES = ['APROBAR', 'RECHAZAR']
+
+// Los archivos ya llegan filtrados por multer (JPG, PNG o PDF de hasta 10 MB).
+function validarPedidoTransferencia(body = {}, archivos = []) {
+    const { reservaId, concepto } = body ?? {}
+    const lista = archivos ?? []
+    if (!textoNoVacio(reservaId)) return { error: 'Falta la reserva a pagar' }
+    if (!CONCEPTOS_TRANSFERENCIA.includes(concepto)) return { error: 'Por ahora solo se paga por transferencia el alquiler' }
+    if (lista.length === 0) return { error: 'Adjunta el comprobante de la transferencia' }
+    if (lista.length > MAX_ARCHIVOS_EVIDENCIA) return { error: `Puedes adjuntar como máximo ${MAX_ARCHIVOS_EVIDENCIA} archivos` }
+    return { datos: { reservaId, concepto, archivos: lista } }
+}
+
+function validarDecisionManual(body = {}) {
+    const { decision, motivo, aprobarReserva = false } = body ?? {}
+    if (!DECISIONES_MANUALES.includes(decision)) return { error: 'La decisión debe ser APROBAR o RECHAZAR' }
+    if (typeof aprobarReserva !== 'boolean') return { error: 'aprobarReserva debe ser true o false' }
+    if (decision === 'RECHAZAR') {
+        // El residente va a leer el motivo: no puede quedar vacío.
+        if (!textoNoVacio(motivo)) return { error: 'Para rechazar hay que escribir el motivo' }
+        if (aprobarReserva) return { error: 'La reserva se puede aprobar solo al aprobar el pago' }
+        return { datos: { decision, motivo: motivo.trim(), aprobarReserva: false } }
+    }
+    return { datos: { decision, motivo: undefined, aprobarReserva } }
+}
+
 module.exports = {
     validarPedidoPago,
+    validarPedidoTransferencia,
+    validarDecisionManual,
+    MAX_ARCHIVOS_EVIDENCIA,
     validarPedidoConfirmacion,
     armarUrlRetorno,
     venceEnPagoReserva,
