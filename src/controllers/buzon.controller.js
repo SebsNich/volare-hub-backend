@@ -1,22 +1,21 @@
 const prisma = require('../lib/prisma');
 const { obtenerParametrosPaginacion } = require('../lib/paginacion');
+const { validarSugerencia, crearLimiteBuzon } = require('../lib/buzon');
+
+// Una sola instancia por proceso: el conteo por IP vive en memoria (RF-50).
+const limiteBuzon = crearLimiteBuzon();
+const limitarBuzon = limiteBuzon.middleware;
 
 const enviarSugerencia = async (req, res) => {
-    const {nombre, manzana, villa, tipo, mensaje} = req.body;
+    const pedido = validarSugerencia(req.body);
+    if (pedido.error) {
+        return res.status(400).json({ error: pedido.error });
+    }
 
     try{
-        if (!nombre || !tipo || !mensaje) {
-            return res.status(400).json({ error: 'Faltan campos obligatorios' });
-        }
-        const sugerencia = await prisma.suggestion.create({
-            data: {
-                nombre,
-                manzana,
-                villa,
-                tipo,
-                mensaje
-            }
-        });
+        const sugerencia = await prisma.suggestion.create({ data: pedido.datos });
+        // Solo cuentan los envíos guardados: un formulario mal llenado no gasta el cupo.
+        limiteBuzon.registrarEnvio(req.ip);
         res.status(201).json(sugerencia);
     }
     catch (error) {
@@ -96,6 +95,7 @@ const archivarSugerencia = async (req, res) => {
 
 module.exports = {
     enviarSugerencia,
+    limitarBuzon,
     obtenerSugerencias,
     marcarLeida,
     archivarSugerencia

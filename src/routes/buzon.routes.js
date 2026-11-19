@@ -1,8 +1,9 @@
 const router = require('express').Router()
 const { verificarToken, verificarAdmin } = require('../middleware/auth.middleware')
-const { enviarSugerencia, obtenerSugerencias, marcarLeida, archivarSugerencia } = require('../controllers/buzon.controller')
+const { enviarSugerencia, limitarBuzon, obtenerSugerencias, marcarLeida, archivarSugerencia } = require('../controllers/buzon.controller')
 
-router.post('/', enviarSugerencia)
+// RF-50: límite por IP antes de validar y guardar.
+router.post('/', limitarBuzon, enviarSugerencia)
 router.get('/', verificarToken, verificarAdmin, obtenerSugerencias)
 router.put('/:id/leida', verificarToken, verificarAdmin, marcarLeida)
 router.put('/:id/archivar', verificarToken, verificarAdmin, archivarSugerencia)

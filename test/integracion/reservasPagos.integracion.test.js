@@ -14,6 +14,8 @@ const { crearUsuario, crearReserva, crearPago, limpiar } = crearDatosIntegracion
 beforeEach(limpiar);
 after(async () => {
     await limpiar();
+    // Las sugerencias del buzón no tienen usuario: se borran por el prefijo del nombre.
+    await prisma.suggestion.deleteMany({ where: { nombre: { startsWith: 'it.reservas-pagos.buzon.' } } });
     await prisma.$disconnect();
 });
 
@@ -280,4 +282,37 @@ test('RF-20: cambiar el correo por uno mal escrito responde 400 y no lo cambia',
     assert.equal(res.statusCode, 400);
     assert.match(res.cuerpo.mensaje, /correo/);
     assert.equal((await prisma.user.findUnique({ where: { id: usuario.id } })).email, antes);
+});
+
+// ---------- RF-50: buzón con validación y límite por IP ----------
+
+test('RF-50: un mensaje demasiado largo responde 400 y no se guarda', async () => {
+    const { enviarSugerencia } = require('../../src/controllers/buzon.controller');
+    const nombre = `it.reservas-pagos.buzon.${Date.now()}`;
+    const res = respuestaFalsa();
+    await enviarSugerencia({ ip: '10.0.0.1', body: { nombre, tipo: 'QUEJA', mensaje: 'x'.repeat(2001) } }, res);
+    assert.equal(res.statusCode, 400);
+    assert.equal(await prisma.suggestion.count({ where: { nombre } }), 0);
+});
+
+test('RF-50: la misma IP puede enviar 5 y el sexto intento recibe 429 sin guardarse', async () => {
+    const { enviarSugerencia, limitarBuzon } = require('../../src/controllers/buzon.controller');
+    const nombre = `it.reservas-pagos.buzon.${Date.now()}`;
+    const ip = `10.0.0.${Math.floor(Math.random() * 200) + 20}`;
+    const enviar = async () => {
+        const req = { ip, body: { nombre, tipo: 'SUGERENCIA', mensaje: 'Más bancas en el parque' } };
+        const res = respuestaFalsa();
+        let siguio = false;
+        limitarBuzon(req, res, () => { siguio = true; });
+        if (siguio) await enviarSugerencia(req, res);
+        return res.statusCode;
+    };
+    try {
+        const estados = [];
+        for (let i = 0; i < 6; i++) estados.push(await enviar());
+        assert.deepEqual(estados, [201, 201, 201, 201, 201, 429]);
+        assert.equal(await prisma.suggestion.count({ where: { nombre } }), 5);
+    } finally {
+        await prisma.suggestion.deleteMany({ where: { nombre } });
+    }
 });
