@@ -205,3 +205,13 @@ test('aprobar una transferencia cuando el alquiler ya se pagó en línea la deja
     assert.equal(r.status, 200);
     assert.equal((await leerPago(pagoId)).estado, 'DUPLICADO');
 });
+
+test('POST /confirmar con una transferencia responde 409 claro (antes era 500) y no la cambia', async () => {
+    const { servicio, dueno, admin, pagoId } = await transferenciaPendiente();
+    for (const usuario of [admin, dueno]) {
+        const r = await servicio.confirmarPago(usuario, pagoId, { resultado: 'APROBADO' });
+        assert.equal(r.status, 409);
+        assert.match(r.cuerpo.error, /transferencia/);
+    }
+    assert.equal((await leerPago(pagoId)).estado, 'PENDIENTE');
+});

@@ -209,6 +209,11 @@ function crearServicioPagos({ prisma, registro, urlFrontend, ahora = () => new D
 
         const proveedor = registro.obtener(pago.proveedor)
         if (!proveedor) return error(409, 'El proveedor de este pago no está disponible')
+        // Una transferencia no tiene "resultado del proveedor": la decide el admin
+        // por POST /api/pagos/:id/decidir. Sin esto, el proveedor lanzaba y daba 500.
+        if (proveedor.capacidades.tipo === 'MANUAL') {
+            return error(409, 'Este pago es una transferencia: la decide la administración desde el detalle de la reserva')
+        }
         if (!puedeConfirmar({ pago, usuario, proveedor })) return error(403, 'No puedes confirmar este pago')
 
         const vista = (p) => ({ status: 200, cuerpo: { pago: pagoParaUsuario(p, usuario) } })
