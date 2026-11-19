@@ -16,6 +16,7 @@ const { tablaTarifas } = require('../lib/tarifas');
 const { INCLUIR_PAGOS_PARA_RESUMEN, conEstadoDePago } = require('../lib/pagos/resumenReserva');
 const { puedeAprobarReserva } = require('../lib/pagos/reglasPago');
 const { registroPagos } = require('../lib/pagos/registroActivo');
+const { vencerSinFallar } = require('../lib/pagos/vencimientoActivo');
 
 const ESPACIOS_VALIDOS = ['CABANA_ARBOL', 'CABANA_MEDIO', 'CABANA_RIO', 'CASA_CLUB'];
 const TIPOS_CUENTA_VALIDOS = ['AHORROS', 'CORRIENTE'];
@@ -86,6 +87,9 @@ const obtenerDisponibilidadCabanas = async (req, res) => {
             return res.status(400).json({ error: 'Parámetro mes inválido, formato esperado YYYY-MM' });
         }
 
+        // Antes de leer los turnos ocupados, se liberan los de pagos en línea vencidos.
+        await vencerSinFallar();
+
         const reservas = await prisma.reserva.findMany({
             where: {
                 espacio: { in: CABANAS },
@@ -114,6 +118,9 @@ const obtenerDisponibilidadCasaClub = async (req, res) => {
         if (!rango) {
             return res.status(400).json({ error: 'Parámetro mes inválido, formato esperado YYYY-MM' });
         }
+
+        // Antes de leer los turnos ocupados, se liberan los de pagos en línea vencidos.
+        await vencerSinFallar();
 
         const reservas = await prisma.reserva.findMany({
             where: {
@@ -182,6 +189,9 @@ const crearReserva = async (req, res) => {
         }
 
         const fechaObj = new Date(fecha);
+
+        // Un turno apartado por un pago en línea vencido debe poder tomarse ya.
+        await vencerSinFallar();
 
         const slotOcupado = await prisma.reserva.findFirst({
             where: {

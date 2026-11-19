@@ -20,14 +20,14 @@ function crearDatosIntegracion(prisma, prefijo) {
         return { id: u.id, rol: u.rol };
     }
 
-    async function crearReserva(usuario, { creadoEn = new Date(), estado = 'PENDIENTE', comprobantePagoUrls = [], espacio = 'CABANA_ARBOL' } = {}) {
+    async function crearReserva(usuario, { creadoEn = new Date(), estado = 'PENDIENTE', comprobantePagoUrls = [], espacio = 'CABANA_ARBOL', fecha = null } = {}) {
         contador += 1;
         return prisma.reserva.create({
             data: {
                 usuarioId: usuario.id,
                 espacio,
                 // Fechas lejanas y distintas: no chocan con el índice de turno único.
-                fecha: new Date(Date.UTC(2031, 0, 1 + contador)),
+                fecha: fecha ?? new Date(Date.UTC(2031, 0, 1 + contador)),
                 horario: 'CABANA_COMPLETO',
                 manzana: '01', villa: '02',
                 motivoEvento: 'Prueba de integración',

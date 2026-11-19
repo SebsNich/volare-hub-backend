@@ -6,7 +6,7 @@ verificarBaseDePruebas(process.env.DATABASE_URL); // antes de cargar prisma
 const { test, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const prisma = require('../../src/lib/prisma');
-const { obtenerMisReservas, aprobarReserva } = require('../../src/controllers/reservas.controller');
+const { obtenerMisReservas, aprobarReserva, obtenerDisponibilidadCabanas, crearReserva: crearReservaControlador } = require('../../src/controllers/reservas.controller');
 const { crearDatosIntegracion, respuestaFalsa } = require('../helpers/datosIntegracion');
 
 const { crearUsuario, crearReserva, crearPago, limpiar } = crearDatosIntegracion(prisma, 'it.reservas-pagos.');
@@ -89,4 +89,52 @@ test('aprobar: una reserva que no existe responde 404', async () => {
     const res = respuestaFalsa();
     await aprobarReserva({ user: admin, params: { id: '00000000-0000-0000-0000-000000000000' } }, res);
     assert.equal(res.statusCode, 404);
+});
+
+// ---------- (d) vencimiento antes de consultar disponibilidad ----------
+
+test('disponibilidad: un turno con pago en línea vencido aparece libre y la reserva queda RECHAZADA', async () => {
+    const dueno = await crearUsuario();
+    const vencida = await crearReserva(dueno, { creadoEn: new Date(Date.now() - 16 * 60000) });
+    await crearPago(vencida, { estado: 'PENDIENTE' });
+    const conComprobante = await crearReserva(dueno, { creadoEn: new Date(Date.now() - 16 * 60000), comprobantePagoUrls: COMPROBANTE });
+    const mes = vencida.fecha.toISOString().slice(0, 7);
+
+    const res = respuestaFalsa();
+    await obtenerDisponibilidadCabanas({ query: { mes } }, res);
+
+    assert.equal(res.statusCode, 200);
+    const ocupadas = res.cuerpo.CABANA_ARBOL;
+    assert.equal(ocupadas.includes(vencida.fecha.toISOString().slice(0, 10)), false);
+    assert.equal((await prisma.reserva.findUnique({ where: { id: vencida.id } })).estado, 'RECHAZADA');
+    // La del comprobante sigue ocupando su turno, si cae en el mismo mes.
+    if (conComprobante.fecha.toISOString().slice(0, 7) === mes) {
+        assert.equal(ocupadas.includes(conComprobante.fecha.toISOString().slice(0, 10)), true);
+    }
+    assert.equal((await prisma.reserva.findUnique({ where: { id: conComprobante.id } })).estado, 'PENDIENTE');
+});
+
+test('crearReserva: se puede tomar un turno apartado por un pago en línea vencido', async () => {
+    // 2032-03-06 es sábado: las cabañas no se reservan los lunes.
+    const fecha = new Date('2032-03-06T00:00:00.000Z');
+    const primero = await crearUsuario();
+    const vencida = await crearReserva(primero, { fecha, creadoEn: new Date(Date.now() - 16 * 60000) });
+    await crearPago(vencida, { estado: 'PENDIENTE' });
+
+    const segundo = await crearUsuario();
+    const res = respuestaFalsa();
+    await crearReservaControlador({
+        user: segundo,
+        files: {},
+        body: {
+            espacio: 'CABANA_ARBOL', fecha: '2032-03-06', horario: 'CABANA_COMPLETO', motivoEvento: 'Cumpleaños',
+            manzana: '01', villa: '02', nombres: 'Otro', apellidos: 'Residente', correo: 'otro@ejemplo.test',
+            celular: '0999999999', cedula: '0912345678', bancoNombre: 'Banco', numeroCuenta: '123',
+            tipoCuenta: 'AHORROS', cedulaRucBancario: '0912345678'
+        }
+    }, res);
+
+    assert.equal(res.statusCode, 201, JSON.stringify(res.cuerpo));
+    assert.equal(res.cuerpo.usuarioId, segundo.id);
+    assert.equal((await prisma.reserva.findUnique({ where: { id: vencida.id } })).estado, 'RECHAZADA');
 });

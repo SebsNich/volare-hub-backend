@@ -14,6 +14,8 @@ const sistemaRoutes = require('./routes/sistema.routes')
 const landingRoutes = require('./routes/landing.routes')
 const pagosRoutes = require('./routes/pagos.routes')
 const { registroPagos } = require('./lib/pagos/registroActivo')
+const { vencerReservasSinPago } = require('./lib/pagos/vencimientoActivo')
+const { iniciarVencimientoPeriodico } = require('./lib/pagos/vencimientoReservas')
 
 const { saltosDeProxy } = require('./lib/trustProxy')
 
@@ -68,4 +70,6 @@ app.listen(PORT, () => {
     // Queda en los logs de Render para comprobar la configuración desplegada.
     console.log(`trust proxy: ${SALTOS_DE_PROXY} salto(s)`);
     console.log(`pagos: proveedores ${registroPagos.codigos().join(', ')}`);
+    // Solo aquí, al escuchar: las pruebas no cargan app.js, así que nunca corre en ellas.
+    iniciarVencimientoPeriodico({ tarea: vencerReservasSinPago });
 });
