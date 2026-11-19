@@ -255,3 +255,29 @@ test('RF-52: desactivar a otro usuario sigue funcionando, y un id inexistente re
     await cambiarEstadoUsuario({ user: admin, params: { id: '00000000-0000-0000-0000-000000000000' }, body: { activo: false } }, res404);
     assert.equal(res404.statusCode, 404);
 });
+
+// ---------- RF-20: formato del correo ----------
+
+test('RF-20: registrar con un correo mal escrito responde 400 y no crea la cuenta', async () => {
+    const { registrar } = require('../../src/controllers/auth.controller');
+    const res = respuestaFalsa();
+    const email = 'it.reservas-pagos.correo-malo';
+    await registrar({ body: {
+        nombres: 'Ana', apellidos: 'Pérez', email, password: 'ClaveSegura123', cedula: '0912345678',
+        celular: '0999999999', manzana: '01', villa: '02'
+    } }, res);
+    assert.equal(res.statusCode, 400);
+    assert.match(res.cuerpo.mensaje, /correo/);
+    assert.equal(await prisma.user.count({ where: { email } }), 0);
+});
+
+test('RF-20: cambiar el correo por uno mal escrito responde 400 y no lo cambia', async () => {
+    const { cambiarEmail } = require('../../src/controllers/auth.controller');
+    const usuario = await crearUsuario();
+    const antes = (await prisma.user.findUnique({ where: { id: usuario.id } })).email;
+    const res = respuestaFalsa();
+    await cambiarEmail({ user: usuario, body: { passwordActual: 'no-se-usa', emailNuevo: 'sin-arroba' } }, res);
+    assert.equal(res.statusCode, 400);
+    assert.match(res.cuerpo.mensaje, /correo/);
+    assert.equal((await prisma.user.findUnique({ where: { id: usuario.id } })).email, antes);
+});

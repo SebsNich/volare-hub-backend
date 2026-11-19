@@ -4,7 +4,7 @@ const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { subirArchivo, eliminarArchivo } = require('../lib/cloudinary');
 const { estaBloqueado, registrarIntentoFallido, limpiarIntentos } = require('../lib/rateLimiterRecuperacion');
-const { esCedulaValida } = require('../lib/validadores');
+const { esCedulaValida, esEmailValido, MENSAJE_EMAIL_INVALIDO } = require('../lib/validadores');
 const { crearLimitesLogin } = require('../lib/limitesLogin');
 const { validarContrasena } = require('../lib/contrasena');
 const { camposEditablesPerfil } = require('../lib/perfilPublico');
@@ -61,6 +61,9 @@ const registrar = async (req, res) => {
 
     if (!nombres || !apellidos || !req.body.email || !password || !cedula || !celular || !req.body.manzana || !req.body.villa) {
         return res.status(400).json({ mensaje: 'Todos los campos son obligatorios' })
+    }
+    if (!esEmailValido(req.body.email)) {
+        return res.status(400).json({ mensaje: MENSAJE_EMAIL_INVALIDO });
     }
     if (!esCedulaValida(cedula)) {
         return res.status(400).json({ mensaje: 'La cédula debe tener exactamente 10 dígitos numéricos' });
@@ -402,6 +405,10 @@ const cambiarEmail = async (req, res) => {
     try {
         if (!passwordActual || !emailNuevo) {
             return res.status(400).json({ mensaje: 'Todos los campos son obligatorios' });
+        }
+        // Antes de comparar la contraseña: es la validación barata y no revela nada.
+        if (!esEmailValido(emailNuevo)) {
+            return res.status(400).json({ mensaje: MENSAJE_EMAIL_INVALIDO });
         }
 
         const user = await prisma.user.findUnique({
