@@ -7,6 +7,7 @@ const { estaBloqueado, registrarIntentoFallido, limpiarIntentos } = require('../
 const { esCedulaValida } = require('../lib/validadores');
 const { crearLimitesLogin } = require('../lib/limitesLogin');
 const { validarContrasena } = require('../lib/contrasena');
+const { camposEditablesPerfil } = require('../lib/perfilPublico');
 const { mensajeDeBloqueo } = require('../lib/limitadorIntentos');
 
 const limitesLogin = crearLimitesLogin();
@@ -281,7 +282,7 @@ const obtenerPerfil = async (req, res) => {
 }
 
 const editarPerfil = async (req, res) => {
-    const { nombres, apellidos, bio, eliminarFoto } = req.body;
+    const { eliminarFoto } = req.body;
 
     try{
         const usuarioActual = await prisma.user.findUnique({ where: { id: req.user.id } });
@@ -305,9 +306,7 @@ const editarPerfil = async (req, res) => {
                 id: req.user.id
             },
             data: {
-                nombres: nombres,
-                apellidos: apellidos,
-                bio: bio,
+                ...camposEditablesPerfil(req.body),
                 foto: foto
             },
             select: {

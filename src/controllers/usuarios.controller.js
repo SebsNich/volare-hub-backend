@@ -8,6 +8,7 @@ const { filtroResidentesVisibles, puedeVerPerfil } = require('../lib/visibilidad
 const { FILTRO_SOLICITUDES_PENDIENTES } = require('../lib/resumenAdmin');
 const { validarContrasena } = require('../lib/contrasena');
 const { ORDEN_PERFIL } = require('../lib/ordenPosts');
+const { SELECCION_PERFIL_PUBLICO, SELECCION_BUSCADOR } = require('../lib/perfilPublico');
 const {
     contarCuentasEnCasa,
     agregarCuentasEnCasa,
@@ -61,16 +62,7 @@ const obtenerPerfilPublico = async (req, res) => {
             data: {
                 visitasPerfil: { increment: 1 }
             },
-            select: {
-                id: true,
-                nombres: true,
-                apellidos: true,
-                rol: true,
-                bio: true,
-                foto: true,
-                creadoEn: true,
-                visitasPerfil: true
-            }
+            select: SELECCION_PERFIL_PUBLICO
         });
         const posts = await prisma.post.findMany({
             where: {
@@ -113,16 +105,7 @@ const buscarUsuarios = async (req, res) => {
             },
             take: 8,
             orderBy: { nombres: 'asc' },
-            select: {
-                id: true,
-                nombres: true,
-                apellidos: true,
-                foto: true,
-                // Para que el admin vea la etiqueta de estado; un residente
-                // solo recibe cuentas aprobadas y activas.
-                activo: true,
-                estadoCuenta: true
-            }
+            select: SELECCION_BUSCADOR
         });
 
         return res.status(200).json({ usuarios });
