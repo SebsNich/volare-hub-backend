@@ -13,6 +13,7 @@ const {
     RESPUESTA_TURNO_OCUPADO
 } = require('../lib/reservas.helpers');
 const { tablaTarifas } = require('../lib/tarifas');
+const { INCLUIR_PAGOS_PARA_RESUMEN, conEstadoDePago } = require('../lib/pagos/resumenReserva');
 
 const ESPACIOS_VALIDOS = ['CABANA_ARBOL', 'CABANA_MEDIO', 'CABANA_RIO', 'CASA_CLUB'];
 const TIPOS_CUENTA_VALIDOS = ['AHORROS', 'CORRIENTE'];
@@ -413,13 +414,14 @@ const obtenerMisReservas = async (req, res) => {
                 where,
                 orderBy: { fecha: 'desc' },
                 skip,
-                take
+                take,
+                include: INCLUIR_PAGOS_PARA_RESUMEN
             }),
             prisma.reserva.count({ where })
         ]);
 
         const totalPaginas = Math.max(1, Math.ceil(total / take));
-        res.status(200).json({ reservas, totalPaginas, paginaActual: pagina });
+        res.status(200).json({ reservas: reservas.map(conEstadoDePago), totalPaginas, paginaActual: pagina });
     }
     catch (error) {
         console.error('Error al obtener mis reservas:', error);
