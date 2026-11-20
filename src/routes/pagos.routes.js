@@ -3,13 +3,15 @@ const { verificarToken, verificarAdmin } = require('../middleware/auth.middlewar
 const { verificarEstadoCuenta } = require('../middleware/estadoCuenta.middleware')
 const { camposEvidenciaTransferencia } = require('../lib/multer')
 const {
-    crearPago, confirmarPago, obtenerPago, listarPagos, registrarTransferencia, decidirPagoManual
+    metodosDePago, crearPago, confirmarPago, obtenerPago, listarPagos, registrarTransferencia, decidirPagoManual
 } = require('../controllers/pagos.controller')
 
 // Pagar es un servicio: solo cuentas aprobadas y activas, como las reservas.
 // Quién es dueño de cada pago lo decide el servicio (otro usuario → 404).
 const cuentaAprobada = verificarEstadoCuenta()
 
+// Antes de '/:id' para que "metodos" no se tome como un id de pago.
+router.get('/metodos', verificarToken, cuentaAprobada, metodosDePago)
 router.post('/', verificarToken, cuentaAprobada, crearPago)
 // La evidencia llega como multipart (campo "evidencia", hasta 5 archivos JPG, PNG o PDF).
 router.post('/transferencia', verificarToken, cuentaAprobada, camposEvidenciaTransferencia, registrarTransferencia)

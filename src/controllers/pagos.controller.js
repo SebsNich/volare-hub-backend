@@ -3,6 +3,7 @@ const { crearServicioPagos } = require('../lib/pagos/servicioPagos');
 const { registroPagos } = require('../lib/pagos/registroActivo');
 const { subirArchivo } = require('../lib/cloudinary');
 const { obtenerCarpetaReserva } = require('../lib/reservas.helpers');
+const { describirMetodosDePago } = require('../lib/pagos/metodosDisponibles');
 
 // Misma carpeta que los comprobantes de la reserva, con prefijo para distinguirlos.
 async function subirEvidencias(archivos, reserva) {
@@ -35,6 +36,8 @@ const responder = (operacion) => async (req, res) => {
     }
 };
 
+// No depende de la base de datos: solo lo que se configuró al arrancar el servidor.
+const metodosDePago = (req, res) => res.json(describirMetodosDePago(registroPagos));
 const crearPago = responder((req) => servicio.crearPago(req.user, req.body));
 const confirmarPago = responder((req) => servicio.confirmarPago(req.user, req.params.id, req.body));
 const obtenerPago = responder((req) => servicio.obtenerPago(req.user, req.params.id));
@@ -42,4 +45,4 @@ const listarPagos = responder((req) => servicio.listarPagosDeReserva(req.user, r
 const registrarTransferencia = responder((req) => servicio.registrarTransferencia(req.user, req.body, req.files));
 const decidirPagoManual = responder((req) => servicio.decidirPagoManual(req.user, req.params.id, req.body));
 
-module.exports = { crearPago, confirmarPago, obtenerPago, listarPagos, registrarTransferencia, decidirPagoManual };
+module.exports = { metodosDePago, crearPago, confirmarPago, obtenerPago, listarPagos, registrarTransferencia, decidirPagoManual };
