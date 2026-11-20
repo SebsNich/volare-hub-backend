@@ -1,7 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
-dotenv.config();
+// Solo si el entorno no trae ya su configuración: así `npm run dev` (.env.local)
+// nunca cae al .env, que tiene las credenciales de producción.
+if (!process.env.DATABASE_URL) dotenv.config();
 
 const authRoutes = require('./routes/auth.routes');
 const postsRoutes = require('./routes/posts.routes');
@@ -18,6 +20,9 @@ const { vencerReservasSinPago } = require('./lib/pagos/vencimientoActivo')
 const { iniciarVencimientoPeriodico } = require('./lib/pagos/vencimientoReservas')
 
 const { saltosDeProxy } = require('./lib/trustProxy')
+const { cabecerasSeguras, respuestaDeError, validarSecretoJwt, crearLimitadorGeneral } = require('./lib/seguridad')
+
+validarSecretoJwt(process.env)
 
 const app = express();
 
@@ -25,6 +30,8 @@ const app = express();
 // compartirían un solo contador de intentos por IP. Ver lib/trustProxy.js.
 const SALTOS_DE_PROXY = saltosDeProxy(process.env)
 app.set('trust proxy', SALTOS_DE_PROXY)
+app.disable('x-powered-by')
+app.use(cabecerasSeguras(process.env))
 
 const origenesPermitidos = [
     'http://localhost:5173',
@@ -43,7 +50,9 @@ app.use(cors({
     },
     credentials: true
 }))
-app.use(express.json());
+app.use(crearLimitadorGeneral({ max: 300, ventanaMs: 60 * 1000 }))
+// 100 kb sobran para un formulario; los archivos van por multer, que tiene su propio tope.
+app.use(express.json({ limit: '100kb' }));
 app.use('/api/auth', authRoutes)
 app.use('/api/posts', postsRoutes)
 app.use('/api/buzon', suggestionsRoutes)
@@ -60,8 +69,10 @@ app.get('/', (req, res) => {
 });
 
 app.use((err, req, res, next) => {
-    console.error('Error no manejado:', err);
-    res.status(400).json({ error: err.message || 'Error al procesar la solicitud' });
+    const { status, cuerpo } = respuestaDeError(err);
+    // El detalle completo queda solo en el log del servidor.
+    if (status === 500) console.error('Error no manejado:', err);
+    res.status(status).json(cuerpo);
 });
 
 const PORT = process.env.PORT || 3000;

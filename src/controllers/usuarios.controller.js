@@ -1,5 +1,6 @@
 const prisma = require('../lib/prisma');
 const bcryptjs = require('bcryptjs');
+const { COSTO_BCRYPT } = require('../lib/seguridad');
 const { obtenerParametrosPaginacion } = require('../lib/paginacion');
 const { ejecutarConReintentos } = require('../lib/reintentos');
 const { buscarResidentesQueOcupanCupo } = require('../lib/residentes');
@@ -226,7 +227,7 @@ const crearAdmin = async (req, res) => {
             return res.status(400).json({ mensaje: 'El email ya está registrado' });
         }
 
-        const hash = await bcryptjs.hash(password, 10);
+        const hash = await bcryptjs.hash(password, COSTO_BCRYPT);
 
         const resultado = await prisma.user.create({
             data: {

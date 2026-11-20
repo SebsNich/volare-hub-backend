@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const prisma = require('../lib/prisma');
 const bcryptjs = require('bcryptjs');
+const { COSTO_BCRYPT } = require('../lib/seguridad');
 const jwt = require('jsonwebtoken');
 const { subirArchivo, eliminarArchivo } = require('../lib/cloudinary');
 const { estaBloqueado, registrarIntentoFallido, limpiarIntentos } = require('../lib/rateLimiterRecuperacion');
@@ -28,7 +29,7 @@ const {
 const firmarToken = (usuario) => jwt.sign(
     { id: usuario.id, rol: usuario.rol },
     process.env.JWT_SECRET,
-    { expiresIn: '24h' }
+    { expiresIn: '24h', algorithm: 'HS256' }
 );
 
 const buscarPorEmail = (cliente, email) => cliente.user.findFirst({
@@ -77,7 +78,7 @@ const registrar = async (req, res) => {
 
     try {
         // El hash va fuera de la transacción: es lento y no necesita la base.
-        const hash = await bcryptjs.hash(password, 10);
+        const hash = await bcryptjs.hash(password, COSTO_BCRYPT);
         const datos = {
             nombre: `${nombres} ${apellidos}`.trim(),
             nombres, apellidos, cedula, celular, manzana, villa,
@@ -234,7 +235,7 @@ const restablecerContrasena = async (req, res) => {
             return res.status(400).json({ mensaje: 'La nueva contraseña debe ser diferente a la actual.' });
         }
 
-        const hash = await bcryptjs.hash(nuevaContrasena, 10);
+        const hash = await bcryptjs.hash(nuevaContrasena, COSTO_BCRYPT);
 
         await prisma.$transaction([
             prisma.user.update({ where: { id: tokenRecuperacion.usuarioId }, data: { password: hash } }),
@@ -364,7 +365,7 @@ const cambiarPassword = async (req, res) => {
             return res.status(400).json({ mensaje: 'Contraseña actual incorrecta' });
         }
 
-        const hash = await bcryptjs.hash(passwordNuevo, 10);
+        const hash = await bcryptjs.hash(passwordNuevo, COSTO_BCRYPT);
 
         const usuarioActualizado = await prisma.user.update({
             where: {

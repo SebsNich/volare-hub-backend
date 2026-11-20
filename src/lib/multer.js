@@ -1,5 +1,8 @@
 const multer = require('multer')
 
+// Marca el error como "del usuario" para que el manejador general lo muestre tal cual.
+const errorDeUsuario = (mensaje) => Object.assign(new Error(mensaje), { esErrorDeUsuario: true })
+
 const storage = multer.memoryStorage()
 
 const upload = multer({
@@ -8,7 +11,7 @@ const upload = multer({
     fileFilter: (req, file, cb) => {
         file.mimetype.startsWith('image/') || file.mimetype === 'application/pdf'
             ? cb(null, true)
-            : cb(new Error('Solo se permiten imágenes y archivos PDF'), false)
+            : cb(errorDeUsuario('Solo se permiten imágenes y archivos PDF'), false)
     }
 })
 
@@ -20,7 +23,7 @@ const uploadReservas = multer({
     fileFilter: (req, file, cb) => {
         MIMETYPES_RESERVAS.includes(file.mimetype)
             ? cb(null, true)
-            : cb(new Error('Solo se permiten archivos JPG, PNG o PDF'), false)
+            : cb(errorDeUsuario('Solo se permiten archivos JPG, PNG o PDF'), false)
     }
 })
 
