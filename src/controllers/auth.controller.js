@@ -4,6 +4,7 @@ const bcryptjs = require('bcryptjs');
 const { COSTO_BCRYPT } = require('../lib/seguridad');
 const jwt = require('jsonwebtoken');
 const { subirArchivo, eliminarArchivo } = require('../lib/cloudinary');
+const { carpetas } = require('../lib/carpetas');
 const { estaBloqueado, registrarIntentoFallido, limpiarIntentos } = require('../lib/rateLimiterRecuperacion');
 const { esCedulaValida, esEmailValido, MENSAJE_EMAIL_INVALIDO } = require('../lib/validadores');
 const { crearLimitesLogin } = require('../lib/limitesLogin');
@@ -296,7 +297,7 @@ const editarPerfil = async (req, res) => {
             if (usuarioActual.foto) {
                 await eliminarArchivo(usuarioActual.foto);
             }
-            const resultado = await subirArchivo(req.file.buffer, 'volare-hub/perfil/photos', 'image', req.file.originalname);
+            const resultado = await subirArchivo(req.file.buffer, carpetas().perfil(), 'image', req.file.originalname);
             foto = resultado.secure_url;
         } else if (eliminarFoto === 'true') {
             if (usuarioActual.foto) {

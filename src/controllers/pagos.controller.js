@@ -2,12 +2,12 @@ const prisma = require('../lib/prisma');
 const { crearServicioPagos } = require('../lib/pagos/servicioPagos');
 const { registroPagos } = require('../lib/pagos/registroActivo');
 const { subirArchivo } = require('../lib/cloudinary');
-const { obtenerCarpetaReserva } = require('../lib/reservas.helpers');
+const { carpetas } = require('../lib/carpetas');
 const { describirMetodosDePago } = require('../lib/pagos/metodosDisponibles');
 
-// Misma carpeta que los comprobantes de la reserva, con prefijo para distinguirlos.
+// Carpeta propia de pagos por transferencia, separada por concepto.
 async function subirEvidencias(archivos, reserva) {
-    const carpeta = obtenerCarpetaReserva(reserva.espacio, 'comprobantes');
+    const carpeta = carpetas().pago('RESERVA');
     const subidos = await Promise.all(archivos.map(archivo => subirArchivo(
         archivo.buffer,
         carpeta,

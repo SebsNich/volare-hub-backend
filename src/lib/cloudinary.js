@@ -1,4 +1,6 @@
+const path = require('node:path')
 const cloudinary = require('cloudinary').v2
+const { crearAlmacenamientoLocal, PREFIJO_URL } = require('./almacenamientoLocal')
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -6,7 +8,20 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 })
 
+// Sin credenciales de Cloudinary: en desarrollo se guarda en disco; en
+// producción se falla al subir (mejor un error claro que perder archivos).
+const cloudinaryConfigurado = Boolean(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET)
+const usaDisco = !cloudinaryConfigurado && process.env.NODE_ENV !== 'production'
+const almacenamientoLocal = usaDisco
+    ? crearAlmacenamientoLocal({
+        raiz: path.join(__dirname, '..', '..', 'uploads-dev'),
+        urlBase: process.env.API_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`
+    })
+    : null
+if (usaDisco) console.warn('Cloudinary sin configurar: los archivos se guardan en uploads-dev/ (solo desarrollo)')
+
 const subirArchivo = (buffer, carpeta, tipo = 'image', nombreOriginal = '') => {
+    if (almacenamientoLocal) return almacenamientoLocal.subir(buffer, carpeta, tipo, nombreOriginal)
     return new Promise((resolve, reject) => {
         cloudinary.uploader.upload_stream(
             { 
@@ -45,6 +60,9 @@ const extraerPublicId = (url, tipo = 'image') => {
 }
 
 const eliminarArchivo = async (url, tipo = 'image') => {
+    if (almacenamientoLocal || (typeof url === 'string' && url.includes(PREFIJO_URL))) {
+        return almacenamientoLocal ? almacenamientoLocal.eliminar(url) : null
+    }
     const publicId = extraerPublicId(url, tipo)
 
     if (!publicId) {
@@ -63,4 +81,4 @@ const eliminarArchivo = async (url, tipo = 'image') => {
     }
 }
 
-module.exports = { cloudinary, subirArchivo, extraerPublicId, eliminarArchivo }
+module.exports = { almacenamientoLocal, cloudinary, subirArchivo, extraerPublicId, eliminarArchivo }

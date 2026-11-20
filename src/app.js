@@ -53,6 +53,9 @@ app.use(cors({
 app.use(crearLimitadorGeneral({ max: 300, ventanaMs: 60 * 1000 }))
 // 100 kb sobran para un formulario; los archivos van por multer, que tiene su propio tope.
 app.use(express.json({ limit: '100kb' }));
+// Solo desarrollo: sirve los archivos guardados en disco cuando no hay Cloudinary.
+const { almacenamientoLocal } = require('./lib/cloudinary')
+if (almacenamientoLocal) app.use('/uploads-dev', express.static(almacenamientoLocal.raiz))
 app.use('/api/auth', authRoutes)
 app.use('/api/posts', postsRoutes)
 app.use('/api/buzon', suggestionsRoutes)

@@ -1,11 +1,11 @@
 const prisma = require('../lib/prisma');
 const { subirArchivo, eliminarArchivo } = require('../lib/cloudinary');
+const { carpetas } = require('../lib/carpetas');
 const { esCedulaValida } = require('../lib/validadores');
 const { obtenerParametrosPaginacion } = require('../lib/paginacion');
 const {
     CABANAS,
     esCabana,
-    obtenerCarpetaReserva,
     obtenerRangoMes,
     validarDisponibilidadHorario,
     calcularMontos,
@@ -229,9 +229,9 @@ const crearReserva = async (req, res) => {
         const { montoAlquiler, montoGarantia } = calcularMontos(espacio, horario, esParaTerceroBool);
 
         const [comprobantePagoUrls, listaInvitadosUrls, contratoFirmadoUrls] = await Promise.all([
-            subirArchivosSlot(archivos.comprobantePago, obtenerCarpetaReserva(espacio, 'comprobantes')),
-            subirArchivosSlot(archivos.listaInvitados, obtenerCarpetaReserva(espacio, 'documentos'), 'invitados-'),
-            subirArchivosSlot(archivos.contratoFirmado, obtenerCarpetaReserva(espacio, 'documentos'), 'contrato-')
+            subirArchivosSlot(archivos.comprobantePago, carpetas().reserva(espacio, 'comprobantes')),
+            subirArchivosSlot(archivos.listaInvitados, carpetas().reserva(espacio, 'documentos'), 'invitados-'),
+            subirArchivosSlot(archivos.contratoFirmado, carpetas().reserva(espacio, 'documentos'), 'contrato-')
         ]);
 
         const reserva = await prisma.reserva.create({
@@ -371,7 +371,7 @@ const editarReserva = async (req, res) => {
         for (const slot of ['comprobantePago', 'listaInvitados', 'contratoFirmado']) {
             const nuevasUrls = await subirArchivosSlot(
                 archivosNuevos[slot],
-                obtenerCarpetaReserva(reservaActual.espacio, subcarpetaPorSlot[slot]),
+                carpetas().reserva(reservaActual.espacio, subcarpetaPorSlot[slot]),
                 prefijoPorSlot[slot]
             );
             urlsArchivos[campoArrayPorSlot[slot]] = [...conservadas[slot], ...nuevasUrls];

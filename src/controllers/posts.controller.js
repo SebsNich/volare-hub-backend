@@ -1,5 +1,6 @@
 const prisma = require('../lib/prisma');
 const { subirArchivo, eliminarArchivo, extraerPublicId } = require('../lib/cloudinary')
+const { carpetas } = require('../lib/carpetas')
 const { obtenerParametrosPaginacion } = require('../lib/paginacion');
 const { ORDEN_FEED } = require('../lib/ordenPosts');
 const { calcularCambiosAlEditar, calcularCambiosPublico, validarCambioCarrusel } = require('../lib/landing.helpers');
@@ -22,13 +23,13 @@ const crearPost = async (req, res) => {
 
         if (files.imagenes) {
             const imageUrls = await Promise.all(
-                files.imagenes.map(file => subirArchivo(file.buffer, 'volare-hub/posts/images', 'image', file.originalname))
+                files.imagenes.map(file => subirArchivo(file.buffer, carpetas().publicacion('imagen'), 'image', file.originalname))
             );
             imagenesUrl = imageUrls.map(resultado => resultado.secure_url)
         }
         if (files.archivos) {
             const fileUrls = await Promise.all(
-                files.archivos.map(file => subirArchivo(file.buffer, 'volare-hub/posts/docs', 'raw', file.originalname))
+                files.archivos.map(file => subirArchivo(file.buffer, carpetas().publicacion('documento'), 'raw', file.originalname))
             );
             archivosUrl = fileUrls.map(resultado => resultado.secure_url)
         }
@@ -156,13 +157,13 @@ const editarPost = async (req, res) => {
 
         if (files.imagenes) {
             const imageUrls = await Promise.all(
-                files.imagenes.map(file => subirArchivo(file.buffer, 'volare-hub/posts/images', 'image', file.originalname))
+                files.imagenes.map(file => subirArchivo(file.buffer, carpetas().publicacion('imagen'), 'image', file.originalname))
             );
             imagenesNuevosUrl = imageUrls.map(resultado => resultado.secure_url)
         }
         if (files.archivos) {
             const fileUrls = await Promise.all(
-                files.archivos.map(file => subirArchivo(file.buffer, 'volare-hub/posts/docs', 'raw', file.originalname))
+                files.archivos.map(file => subirArchivo(file.buffer, carpetas().publicacion('documento'), 'raw', file.originalname))
             );
             archivosNuevosUrl = fileUrls.map(resultado => resultado.secure_url)
         }

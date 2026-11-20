@@ -7,11 +7,6 @@ function esCabana(espacio) {
     return CABANAS.includes(espacio)
 }
 
-function obtenerCarpetaReserva(espacio, subcarpeta) {
-    const grupo = espacio === 'CASA_CLUB' ? 'casaclub' : 'cabanas'
-    return `servicios/reservas/${grupo}/${subcarpeta}`
-}
-
 function validarDisponibilidadHorario(espacio, fecha, horario) {
     const fechaObj = fecha instanceof Date ? fecha : new Date(fecha)
 
@@ -76,7 +71,6 @@ module.exports = {
     RESPUESTA_TURNO_OCUPADO,
     CABANAS,
     esCabana,
-    obtenerCarpetaReserva,
     obtenerRangoMes,
     validarDisponibilidadHorario,
     calcularMontos
