@@ -225,8 +225,7 @@ model Reserva {
   @@index([espacio])
 }
 
-// Pagos (RF-39 a RF-42). Por ahora solo reservas: las alícuotas (cuotaId y
-// CuotaAlicuota) llegan en su propia migración.
+// Pagos (RF-39 a RF-42): de reservas y de alícuotas.
 enum TipoPago {
   RESERVA
   ALICUOTA
@@ -255,6 +254,8 @@ model Pago {
   concepto           ConceptoPago
   reservaId          String?
   reserva            Reserva?     @relation(fields: [reservaId], references: [id], onDelete: Restrict)
+  cuotaId            String?
+  cuota              CuotaAlicuota? @relation(fields: [cuotaId], references: [id], onDelete: Restrict)
 
   montoCentavos      Int
   estado             EstadoPago   @default(PENDIENTE)
@@ -277,4 +278,43 @@ model Pago {
   @@index([usuarioId])
   @@index([estado])
   @@index([reservaId])
+  @@index([cuotaId])
+}
+
+
+// Alícuotas (RF-43 a RF-45). Valor fijo mensual por villa, sin mora.
+enum EstadoCuota {
+  PENDIENTE
+  PAGADA
+  ANULADA
+}
+
+// Una sola fila (id = 1, lo exige un CHECK): los montos vigentes que el
+// administrador configura. Cada cuota guarda una copia al generarse.
+model ConfigAlicuota {
+  id                   Int      @id @default(1)
+  montoCentavos        Int
+  montoPuntualCentavos Int
+  diasPuntual          Int
+  actualizadoEn        DateTime @updatedAt
+  actualizadoPorId     String?
+}
+
+model CuotaAlicuota {
+  id                   String      @id @default(uuid())
+  manzana              String
+  villa                String
+  // 'AAAA-MM' en hora de Guayaquil.
+  periodo              String
+  estado               EstadoCuota @default(PENDIENTE)
+  montoBaseCentavos    Int
+  montoPuntualCentavos Int
+  diasPuntual          Int
+  creadoEn             DateTime    @default(now())
+  pagadaEn             DateTime?
+  pagos                Pago[]
+
+  @@unique([manzana, villa, periodo])
+  @@index([periodo])
+  @@index([estado])
 }

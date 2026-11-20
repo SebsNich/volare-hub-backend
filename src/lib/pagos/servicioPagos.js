@@ -150,6 +150,15 @@ function crearServicioPagos({ prisma, registro, urlFrontend, ahora = () => new D
     // Lo pagado sigue disponible si la reserva sigue pendiente y nadie más pagó
     // ya ese concepto. Si no, el cobro queda DUPLICADO y se devuelve el dinero.
     async function referenciaDisponible(tx, pago) {
+        if (pago.tipo === 'ALICUOTA') {
+            const cuota = await tx.cuotaAlicuota.findUnique({ where: { id: pago.cuotaId }, select: { estado: true } })
+            if (cuota?.estado !== 'PENDIENTE') return false
+            const otro = await tx.pago.findFirst({
+                where: { cuotaId: pago.cuotaId, estado: 'APROBADO', NOT: { id: pago.id } },
+                select: { id: true }
+            })
+            return !otro
+        }
         const reserva = await tx.reserva.findUnique({ where: { id: pago.reservaId }, select: { estado: true } })
         if (reserva?.estado !== 'PENDIENTE') return false
         const otroAprobado = await tx.pago.findFirst({
@@ -157,6 +166,16 @@ function crearServicioPagos({ prisma, registro, urlFrontend, ahora = () => new D
             select: { id: true }
         })
         return !otroAprobado
+    }
+
+    // Una alícuota aprobada deja la cuota PAGADA en la MISMA transacción: así
+    // nunca hay un pago aprobado con la cuota todavía pendiente.
+    async function cerrarCuotaSiCorresponde(tx, pago, estado) {
+        if (pago.tipo !== 'ALICUOTA' || estado !== 'APROBADO') return
+        await tx.cuotaAlicuota.updateMany({
+            where: { id: pago.cuotaId, estado: 'PENDIENTE' },
+            data: { estado: 'PAGADA', pagadaEn: ahora() }
+        })
     }
 
     // Solo cambia el pago si sigue en el estado que se leyó: si otra petición
@@ -177,7 +196,10 @@ function crearServicioPagos({ prisma, registro, urlFrontend, ahora = () => new D
                 ? { referenciaDisponible: await referenciaDisponible(tx, actual) }
                 : undefined
             const { estado, cambia } = siguienteEstado(actual.estado, respuesta.estado, contexto)
-            return cambia ? cambiarEstado(tx, actual, estado, respuesta) : actual
+            if (!cambia) return actual
+            const resultado = await cambiarEstado(tx, actual, estado, respuesta)
+            await cerrarCuotaSiCorresponde(tx, actual, estado)
+            return resultado
         })
     }
 
@@ -276,7 +298,9 @@ function crearServicioPagos({ prisma, registro, urlFrontend, ahora = () => new D
                     motivoRechazo: estado === 'RECHAZADO' ? respuesta.detalle.motivo : null
                 }
             })
-            if (aprobarReserva) {
+            await cerrarCuotaSiCorresponde(tx, actual, estado)
+            // Aprobar la reserva solo tiene sentido en pagos de reserva.
+            if (aprobarReserva && actual.tipo === 'RESERVA') {
                 if (estado !== 'APROBADO') {
                     throw noSePuedeAprobar('El alquiler ya estaba cubierto o la reserva no está pendiente. No se guardó ningún cambio.')
                 }
