@@ -31,9 +31,10 @@ test('pagar desde el día 6 cuesta $60, siempre valor fijo y sin recargo por mor
     }
 })
 
-test('pagar un mes por adelantado también cuesta $55', () => {
+test('adelantar el pago de un mes futuro NO da descuento: solo cuenta pagar en los primeros días de ese mes', () => {
     const r = calcularMontoCuota({ cuota: cuotaDic, fechaPago: new Date('2026-11-20T15:00:00Z') })
-    assert.equal(r.montoCentavos, 5500)
+    assert.equal(r.montoCentavos, 6000)
+    assert.equal(r.aplicaDescuento, false)
 })
 
 test('el límite del descuento se informa como fecha para mostrarlo al residente', () => {

@@ -26,9 +26,9 @@ const validarPeriodo = (texto) => typeof texto === 'string' && /^\d{4}-(0[1-9]|1
 // Cuánto cuesta HOY pagar esta cuota. Usa los montos guardados en la cuota (los
 // de cuando se generó): si el admin cambia la configuración, lo ya generado no se mueve.
 function calcularMontoCuota({ cuota, fechaPago }) {
-    const periodoPago = periodoDe(fechaPago)
-    const aTiempo = periodoPago < cuota.periodo
-        || (periodoPago === cuota.periodo && diaDelMes(fechaPago) <= cuota.diasPuntual)
+    // El descuento es solo por pagar en los primeros días DEL MES de la cuota:
+    // adelantar meses futuros no lo da (evita pagar todo el año con descuento).
+    const aTiempo = periodoDe(fechaPago) === cuota.periodo && diaDelMes(fechaPago) <= cuota.diasPuntual
     return {
         montoCentavos: aTiempo ? cuota.montoPuntualCentavos : cuota.montoBaseCentavos,
         aplicaDescuento: aTiempo,
