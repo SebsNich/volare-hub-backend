@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const {
     normalizarCodigoCasa,
+    validarCasa,
     normalizarDireccion,
     normalizarEmail,
     contarCuentasEnCasa,
@@ -294,4 +295,19 @@ test('esConflictoDeTransaccion reconoce el código 40001 de Postgres aunque camb
 test('esConflictoDeTransaccion no confunde otros errores del adaptador', () => {
     assert.equal(esConflictoDeTransaccion({ name: 'DriverAdapterError', cause: { originalCode: '23505', kind: 'UniqueConstraintViolation' } }), false);
     assert.equal(esConflictoDeTransaccion(null), false);
+});
+
+test('validarCasa acepta solo números del 1 al 99', () => {
+    assert.equal(validarCasa('7', '03'), null);
+    assert.equal(validarCasa(' 28 ', '30'), null);
+    assert.equal(validarCasa('99', '1'), null);
+});
+
+test('validarCasa rechaza letras, ceros, vacíos y números de 3 dígitos', () => {
+    assert.match(validarCasa('A', '03'), /manzana/);
+    assert.match(validarCasa('07', 'B2'), /villa/);
+    assert.match(validarCasa('0', '03'), /manzana/);
+    assert.match(validarCasa('07', '100'), /villa/);
+    assert.match(validarCasa('', '03'), /manzana/);
+    assert.match(validarCasa('1.5', '03'), /manzana/);
 });

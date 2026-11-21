@@ -19,6 +19,7 @@ const { buscarResidentesQueOcupanCupo } = require('../lib/residentes');
 const {
     normalizarEmail,
     normalizarDireccion,
+    validarCasa,
     contarCuentasEnCasa,
     alcanzaLimiteCasa,
     mensajeLimiteCasa,
@@ -73,6 +74,11 @@ const registrar = async (req, res) => {
     const errorContrasena = validarContrasena(password);
     if (errorContrasena) {
         return res.status(400).json({ mensaje: errorContrasena });
+    }
+
+    const errorCasa = validarCasa(req.body.manzana, req.body.villa);
+    if (errorCasa) {
+        return res.status(400).json({ mensaje: errorCasa });
     }
 
     const { manzana, villa } = normalizarDireccion(req.body.manzana, req.body.villa);

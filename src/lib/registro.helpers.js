@@ -10,6 +10,16 @@ function normalizarCodigoCasa(valor) {
     return limpio.replace(/^0+(?=\d)/, '').padStart(2, '0')
 }
 
+// Desde noviembre 2026 la manzana y la villa son solo números del 1 al 99
+// ("Mz 07 Vll 03"). Los datos viejos con letras se siguen leyendo (ver arriba),
+// pero ya no se aceptan registros nuevos así.
+function validarCasa(manzana, villa) {
+    const esNumeroDeCasa = (v) => /^\d{1,2}$/.test(String(v ?? '').trim()) && Number(v) >= 1
+    if (!esNumeroDeCasa(manzana)) return 'La manzana debe ser un número del 1 al 99 (ej. 07).'
+    if (!esNumeroDeCasa(villa)) return 'La villa debe ser un número del 1 al 99 (ej. 03).'
+    return null
+}
+
 function normalizarDireccion(manzana, villa) {
     return { manzana: normalizarCodigoCasa(manzana), villa: normalizarCodigoCasa(villa) }
 }
@@ -151,6 +161,7 @@ module.exports = {
     LIMITE_CUENTAS_POR_CASA,
     ESTADOS_QUE_OCUPAN_CUPO,
     normalizarCodigoCasa,
+    validarCasa,
     normalizarDireccion,
     normalizarEmail,
     contarCuentasEnCasa,
