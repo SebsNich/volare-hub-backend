@@ -129,10 +129,17 @@ describe('normalizarVilla y referenciaLegible (prueba 13)', () => {
         assert.equal(normalizarVilla('   '), null)
         assert.equal(normalizarVilla(null), null)
     })
+
+    test('normalizarVilla trata "2" y "02" como la misma villa (sin cuotas duplicadas)', () => {
+        assert.equal(normalizarVilla('2'), '02')
+        assert.equal(normalizarVilla('02'), '02')
+        assert.equal(normalizarVilla(' 002 '), '02')
+        assert.equal(normalizarVilla('a'), 'A')
+    })
     test('referencias de reserva y de alícuota', () => {
         assert.equal(referenciaLegible({ concepto: 'ALQUILER', espacio: 'CASA_CLUB', fecha: new Date('2026-11-20T00:00:00Z') }), 'Alquiler Casa Club 2026-11-20')
         assert.equal(referenciaLegible({ concepto: 'GARANTIA', espacio: 'CABANA_ARBOL', fecha: '2026-11-21' }), 'Garantía Cabaña del Árbol 2026-11-21')
-        assert.equal(referenciaLegible({ concepto: 'ALICUOTA', periodo: '2026-11', manzana: 'a', villa: '3' }), 'Alícuota 2026-11 Mz A V 3')
+        assert.equal(referenciaLegible({ concepto: 'ALICUOTA', periodo: '2026-11', manzana: 'a', villa: '3' }), 'Alícuota 2026-11 Mz A V 03')
     })
     test('no incluye datos personales aunque vengan en la entrada', () => {
         const texto = referenciaLegible({

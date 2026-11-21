@@ -2,6 +2,8 @@
 // los datos ya cargados y no conocen la base ni a ningún proveedor concreto;
 // del proveedor solo miran sus capacidades.
 
+const { normalizarCodigoCasa } = require('../registro.helpers')
+
 // Decisión 2: una reserva con pago en línea aparta el turno 15 minutos desde
 // que se crea. Se cuenta desde la reserva, no desde cada intento, para que
 // reintentar no alargue el bloqueo del turno.
@@ -38,7 +40,9 @@ function puedePagarReserva({ reserva, usuario, concepto, pagos = [], proveedor, 
 // "A", "a " y " A" son la misma manzana: User.manzana y User.villa son texto libre.
 function normalizarVilla(texto) {
     if (typeof texto !== 'string') return null
-    const limpio = texto.trim().replace(/\s+/g, ' ').toUpperCase()
+    // Se usa la misma regla que el registro ("2" y "02" son la villa 02); si no,
+    // una casa podría recibir dos cuotas por escribirse distinto en el perfil.
+    const limpio = normalizarCodigoCasa(texto.replace(/\s+/g, ' '))
     return limpio || null
 }
 
