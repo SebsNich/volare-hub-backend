@@ -1,11 +1,12 @@
-// Orquesta el informe económico: decide a quién se envía, valida, envía el
+// Orquesta el envío masivo (informe económico y similares): decide a quién se envía, valida, envía el
 // correo y, si se pidió, publica el comunicado. Las dependencias (base de
 // datos, Resend, Cloudinary) llegan por parámetro para poder probarlo con falsos.
-const { parsearDestinatarios, validarInforme } = require('./informes')
+const { parsearDestinatarios, validarInforme, validarRemitente, mensajeAHtml } = require('./informes')
+const { limpiarHtmlCorreo, htmlATexto } = require('./htmlCorreo')
 
 const bool = (valor) => valor === 'true' || valor === true
 
-async function procesarInforme({ cuerpo = {}, adjuntos = [], autorId }, { correosResidentes, enviar, publicar }) {
+async function procesarInforme({ cuerpo = {}, adjuntos = [], autorId }, { correosResidentes, enviar, publicar, correoPorDefecto = 'contabilidad@urbvolare.com' }) {
     const enviarCorreo = bool(cuerpo.enviarCorreo)
     const publicarComunicado = bool(cuerpo.publicar)
 
@@ -22,15 +23,27 @@ async function procesarInforme({ cuerpo = {}, adjuntos = [], autorId }, { correo
         }
     }
 
+    // El editor manda HTML; un texto sin etiquetas (sin editor) se convierte primero.
+    const original = String(cuerpo.mensaje ?? '')
+    const { html: cuerpoHtml, imagenes } = limpiarHtmlCorreo(/<[a-z][\s\S]*>/i.test(original) ? original : mensajeAHtml(original))
+    const texto = htmlATexto(cuerpoHtml)
+
     const problema = validarInforme({
-        asunto: cuerpo.asunto, mensaje: cuerpo.mensaje, enviarCorreo, publicar: publicarComunicado, destinatarios, adjuntos
+        asunto: cuerpo.asunto, texto, imagenes, enviarCorreo, publicar: publicarComunicado, destinatarios, adjuntos
     })
     if (problema) return { status: 400, cuerpo: { error: problema } }
+
+    let remitente
+    if (enviarCorreo) {
+        const comprobado = validarRemitente({ nombre: cuerpo.remitenteNombre, correo: cuerpo.remitenteCorreo }, { correoPorDefecto })
+        if (comprobado.error) return { status: 400, cuerpo: { error: comprobado.error } }
+        remitente = comprobado.remitente
+    }
 
     const respuesta = { correo: null, publicacion: null }
 
     if (enviarCorreo) {
-        const { enviados, fallidos } = await enviar({ destinatarios, asunto: cuerpo.asunto, mensaje: cuerpo.mensaje, adjuntos })
+        const { enviados, fallidos } = await enviar({ destinatarios, asunto: cuerpo.asunto, cuerpoHtml, imagenesEnLinea: imagenes, adjuntos, remitente })
         if (enviados.length === 0) {
             // No se publica nada: así el administrador puede reintentar sin duplicar el comunicado.
             return { status: 502, cuerpo: { error: 'No se pudo enviar el correo. Intenta de nuevo en unos minutos.', correosFallidos: fallidos.flatMap(f => f.correos) } }
@@ -40,7 +53,9 @@ async function procesarInforme({ cuerpo = {}, adjuntos = [], autorId }, { correo
 
     if (publicarComunicado) {
         try {
-            const post = await publicar({ asunto: cuerpo.asunto.trim(), mensaje: cuerpo.mensaje.trim(), adjuntos, autorId })
+            // Las imágenes del mensaje se publican junto con los demás adjuntos.
+            const imagenesComoAdjuntos = imagenes.map(i => ({ buffer: i.buffer, mimetype: i.mimetype, originalname: i.filename }))
+            const post = await publicar({ asunto: cuerpo.asunto.trim(), mensaje: texto || cuerpo.asunto.trim(), adjuntos: [...adjuntos, ...imagenesComoAdjuntos], autorId })
             respuesta.publicacion = { id: post.id }
         } catch (falla) {
             console.error('Informe: el correo salió pero no se pudo publicar el comunicado:', falla)

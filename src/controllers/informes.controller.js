@@ -2,7 +2,8 @@ const prisma = require('../lib/prisma')
 const { subirArchivo } = require('../lib/cloudinary')
 const { carpetas } = require('../lib/carpetas')
 const { FILTRO_RESIDENTES_ACTIVOS } = require('../lib/resumenAdmin')
-const { enviarInformeEconomico } = require('../lib/correoInforme')
+const { enviarInformeEconomico, correoRemitentePorDefecto } = require('../lib/correoInforme')
+const { DOMINIO_REMITENTE, NOMBRE_REMITENTE } = require('../lib/informes')
 const { procesarInforme } = require('../lib/servicioInforme')
 
 const correosResidentes = async () => {
@@ -28,7 +29,11 @@ async function publicarComunicado({ asunto, mensaje, adjuntos, autorId }) {
 
 const cantidadDestinatarios = async (req, res) => {
     try {
-        res.json({ residentes: await prisma.user.count({ where: FILTRO_RESIDENTES_ACTIVOS }) })
+        res.json({
+            residentes: await prisma.user.count({ where: FILTRO_RESIDENTES_ACTIVOS }),
+            remitente: { nombre: NOMBRE_REMITENTE, correo: correoRemitentePorDefecto() },
+            dominioRemitente: DOMINIO_REMITENTE
+        })
     } catch (error) {
         console.error('Error al contar los destinatarios:', error)
         res.status(500).json({ error: 'Error al contar los destinatarios' })
@@ -39,7 +44,7 @@ const enviarInforme = async (req, res) => {
     try {
         const resultado = await procesarInforme(
             { cuerpo: req.body, adjuntos: req.files ?? [], autorId: req.user.id },
-            { correosResidentes, enviar: enviarInformeEconomico, publicar: publicarComunicado }
+            { correosResidentes, enviar: enviarInformeEconomico, publicar: publicarComunicado, correoPorDefecto: correoRemitentePorDefecto() }
         )
         // Queda en los logs quién envió y a cuántos; nunca las direcciones ni el texto.
         console.log(`Informe económico: admin ${req.user.id}, estado ${resultado.status}, enviados ${resultado.cuerpo.correo?.enviados ?? 0}, publicado ${Boolean(resultado.cuerpo.publicacion)}`)

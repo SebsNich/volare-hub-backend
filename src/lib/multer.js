@@ -46,7 +46,8 @@ const MIMETYPES_INFORMES = [
 
 const uploadInformes = multer({
     storage: storage,
-    limits: { fileSize: 10 * 1024 * 1024, files: 5 }, // 10MB por archivo
+    // fieldSize: el mensaje con imágenes pegadas llega como un campo de texto grande.
+    limits: { fileSize: 10 * 1024 * 1024, files: 5, fieldSize: 8 * 1024 * 1024 }, // 10MB por archivo
     fileFilter: (req, file, cb) => {
         MIMETYPES_INFORMES.includes(file.mimetype)
             ? cb(null, true)

@@ -1,6 +1,6 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
-const { parsearDestinatarios, dividirEnLotes, validarInforme, mensajeAHtml, plantillaInforme, DESTINATARIOS_POR_CORREO } = require('../src/lib/informes')
+const { parsearDestinatarios, dividirEnLotes, validarInforme, validarRemitente, mensajeAHtml, plantillaInforme, DESTINATARIOS_POR_CORREO } = require('../src/lib/informes')
 
 test('lee correos separados por punto y coma, coma o salto de línea', () => {
     const { validos, invalidos } = parsearDestinatarios('a@x.com; b@x.com,c@x.com\nd@x.com ;')
@@ -32,13 +32,13 @@ test('divide en tandas del tamaño que admite Resend', () => {
     assert.equal(dividirEnLotes([]).length, 0)
 })
 
-const base = { asunto: 'Informe octubre', mensaje: 'Adjunto el informe', enviarCorreo: true, publicar: false, destinatarios: ['a@x.com'], adjuntos: [] }
+const base = { asunto: 'Informe octubre', texto: 'Adjunto el informe', imagenes: [], enviarCorreo: true, publicar: false, destinatarios: ['a@x.com'], adjuntos: [] }
 
 test('un informe completo es válido', () => assert.equal(validarInforme(base), null))
 
 test('pide asunto y mensaje', () => {
     assert.match(validarInforme({ ...base, asunto: '  ' }), /asunto/i)
-    assert.match(validarInforme({ ...base, mensaje: '' }), /mensaje/i)
+    assert.match(validarInforme({ ...base, texto: '' }), /mensaje/i)
 })
 
 test('exige enviar por correo o publicar', () => {
@@ -64,7 +64,28 @@ test('limita el número de destinatarios por envío', () => {
 
 test('el mensaje se escapa: no se interpreta como HTML', () => {
     assert.equal(mensajeAHtml('<script>alert(1)</script>\nlinea 2'), '&lt;script&gt;alert(1)&lt;/script&gt;<br>linea 2')
-    const html = plantillaInforme({ asunto: '<b>x</b>', mensaje: 'hola', logoUrl: 'https://l/logo.png' })
+    const html = plantillaInforme({ asunto: '<b>x</b>', cuerpoHtml: '<p>hola</p>', logoUrl: 'https://l/logo.png' })
     assert.ok(!html.includes('<b>x</b>'))
     assert.ok(html.includes('&lt;b&gt;x&lt;/b&gt;'))
+    assert.ok(html.includes('<p>hola</p>'))
+})
+
+test('un mensaje con solo una imagen es válido, y las imágenes cuentan para el peso total', () => {
+    assert.equal(validarInforme({ ...base, texto: '', imagenes: [{ buffer: Buffer.alloc(10) }] }), null)
+    assert.match(validarInforme({ ...base, imagenes: [{ buffer: Buffer.alloc(21 * 1024 * 1024) }] }), /20 MB/)
+    assert.match(validarInforme({ ...base, imagenes: Array(11).fill({ buffer: Buffer.alloc(1) }) }), /10 imágenes/)
+})
+
+test('remitente: por defecto contabilidad; editable solo dentro del dominio verificado', () => {
+    const opciones = { correoPorDefecto: 'contabilidad@urbvolare.com' }
+    assert.deepEqual(validarRemitente({}, opciones).remitente, { nombre: 'Contabilidad Urbanización Volare', correo: 'contabilidad@urbvolare.com' })
+    assert.deepEqual(validarRemitente({ nombre: 'Administración', correo: ' Admin@UrbVolare.com ' }, opciones).remitente, { nombre: 'Administración', correo: 'admin@urbvolare.com' })
+    assert.match(validarRemitente({ correo: 'alguien@gmail.com' }, opciones).error, /@urbvolare.com/)
+    assert.match(validarRemitente({ correo: 'sin-arroba' }, opciones).error, /formato/)
+    assert.match(validarRemitente({ correo: 'a@urbvolare.com.evil.com' }, opciones).error, /@urbvolare.com/)
+})
+
+test('el nombre del remitente no puede romper el encabezado del correo', () => {
+    const { remitente } = validarRemitente({ nombre: 'Falso\r\nBcc: x@y.com <a@b.com>' }, { correoPorDefecto: 'c@urbvolare.com' })
+    assert.ok(!/[\r\n<>"]/.test(remitente.nombre))
 })

@@ -79,3 +79,45 @@ test('si el correo salió pero publicar falla, lo avisa sin perder el resultado 
     assert.equal(r.cuerpo.publicacion, null)
     assert.match(r.cuerpo.errorPublicacion, /no se pudo publicar/)
 })
+
+test('el mensaje con formato se limpia y se envía como HTML; el comunicado queda en texto simple', async () => {
+    const { deps, llamadas } = dependencias()
+    const png = Buffer.from('img').toString('base64')
+    const mensaje = `<p>Hola <b>todos</b></p><script>x()</script><ul><li>uno</li></ul><img src="data:image/png;base64,${png}">`
+    const r = await procesarInforme({ cuerpo: cuerpo({ mensaje, publicar: 'true' }), autorId: 'a1' }, deps)
+    assert.equal(r.status, 200)
+    const envio = llamadas.enviar[0]
+    assert.match(envio.cuerpoHtml, /<b>todos<\/b>/)
+    assert.doesNotMatch(envio.cuerpoHtml, /script|base64/)
+    assert.equal(envio.imagenesEnLinea.length, 1)
+    assert.equal(llamadas.publicar[0].mensaje, 'Hola todos\n• uno')
+    assert.equal(llamadas.publicar[0].adjuntos.length, 1) // la imagen del mensaje también se publica
+})
+
+test('un mensaje sin etiquetas conserva sus saltos de línea y se escapa', async () => {
+    const { deps, llamadas } = dependencias()
+    await procesarInforme({ cuerpo: cuerpo({ mensaje: 'línea 1\nlínea <2>' }), autorId: 'a1' }, deps)
+    assert.match(llamadas.enviar[0].cuerpoHtml, /línea 1<br>línea &lt;2&gt;/)
+})
+
+test('un mensaje que solo tiene formato vacío se rechaza', async () => {
+    const { deps, llamadas } = dependencias()
+    const r = await procesarInforme({ cuerpo: cuerpo({ mensaje: '<p><br></p>' }), autorId: 'a1' }, deps)
+    assert.equal(r.status, 400)
+    assert.match(r.cuerpo.error, /mensaje/i)
+    assert.equal(llamadas.enviar.length, 0)
+})
+
+test('el remitente editable se valida y se pasa al envío', async () => {
+    const { deps, llamadas } = dependencias()
+    const ok = await procesarInforme({ cuerpo: cuerpo({ remitenteNombre: 'Administración', remitenteCorreo: 'admin@urbvolare.com' }), autorId: 'a1' }, deps)
+    assert.equal(ok.status, 200)
+    assert.deepEqual(llamadas.enviar[0].remitente, { nombre: 'Administración', correo: 'admin@urbvolare.com' })
+    const defecto = await procesarInforme({ cuerpo: cuerpo(), autorId: 'a1' }, deps)
+    assert.equal(defecto.status, 200)
+    assert.equal(llamadas.enviar[1].remitente.correo, 'contabilidad@urbvolare.com')
+    const ajeno = await procesarInforme({ cuerpo: cuerpo({ remitenteCorreo: 'alguien@gmail.com' }), autorId: 'a1' }, deps)
+    assert.equal(ajeno.status, 400)
+    assert.match(ajeno.cuerpo.error, /@urbvolare.com/)
+    assert.equal(llamadas.enviar.length, 2)
+})
