@@ -9,11 +9,27 @@ const { estaBloqueado, registrarIntentoFallido, limpiarIntentos } = require('../
 const { esCedulaValida, esEmailValido, MENSAJE_EMAIL_INVALIDO } = require('../lib/validadores');
 const { crearLimitesLogin } = require('../lib/limitesLogin');
 const { validarContrasena } = require('../lib/contrasena');
-const { camposEditablesPerfil } = require('../lib/perfilPublico');
-const { mensajeDeBloqueo } = require('../lib/limitadorIntentos');
+const { camposEditablesPerfil, celularEditablePerfil } = require('../lib/perfilPublico');
+const { crearLimitador, mensajeDeBloqueo } = require('../lib/limitadorIntentos');
 
 const limitesLogin = crearLimitesLogin();
-const { enviarCorreoRecuperacion } = require('../lib/resend');
+// Quien ya inició sesión también puede fallar la contraseña actual al cambiar
+// credenciales (por ejemplo, una sesión abierta en un equipo ajeno). Se limita
+// por usuario para que nadie adivine la contraseña desde ese formulario.
+const limiteCredenciales = crearLimitador({ maxIntentos: 5, ventanaMs: 15 * 60 * 1000 });
+const MENSAJE_CREDENCIALES_BLOQUEADAS = (segundos) =>
+    `Demasiados intentos con la contraseña actual. Intenta de nuevo en ${Math.max(1, Math.ceil(segundos / 60))} min.`;
+
+// El aviso es una cortesía de seguridad: si Resend falla, el cambio ya se hizo
+// y no debe devolverse como error al usuario.
+async function avisarSinFallar(usuario, destino, titulo, texto) {
+    try {
+        await enviarAvisoSeguridad(usuario, destino, titulo, texto);
+    } catch (error) {
+        console.error('No se pudo enviar el aviso de seguridad:', error.message);
+    }
+}
+const { enviarCorreoRecuperacion, enviarAvisoSeguridad } = require('../lib/resend');
 const { ejecutarConReintentos } = require('../lib/reintentos');
 const { buscarResidentesQueOcupanCupo } = require('../lib/residentes');
 const {
@@ -296,6 +312,12 @@ const editarPerfil = async (req, res) => {
     const { eliminarFoto } = req.body;
 
     try{
+        // Antes de tocar Cloudinary: un celular inválido no debe dejar una foto subida a medias.
+        const celular = celularEditablePerfil(req.body);
+        if (celular.error) {
+            return res.status(400).json({ mensaje: celular.error });
+        }
+
         const usuarioActual = await prisma.user.findUnique({ where: { id: req.user.id } });
         let foto = usuarioActual.foto;
 
@@ -318,6 +340,7 @@ const editarPerfil = async (req, res) => {
             },
             data: {
                 ...camposEditablesPerfil(req.body),
+                ...celular.datos,
                 foto: foto
             },
             select: {
@@ -366,10 +389,21 @@ const cambiarPassword = async (req, res) => {
             }
         });
 
+        const bloqueo = limiteCredenciales.consultar(user.id);
+        if (bloqueo.bloqueado) {
+            return res.status(429).json({ mensaje: MENSAJE_CREDENCIALES_BLOQUEADAS(bloqueo.segundosRestantes) });
+        }
+
         const passwordValida = await bcryptjs.compare(passwordActual, user.password);
 
         if (!passwordValida) {
+            limiteCredenciales.registrarFallo(user.id);
             return res.status(400).json({ mensaje: 'Contraseña actual incorrecta' });
+        }
+        limiteCredenciales.limpiar(user.id);
+
+        if (passwordNuevo === passwordActual) {
+            return res.status(400).json({ mensaje: 'La contraseña nueva debe ser distinta de la actual' });
         }
 
         const hash = await bcryptjs.hash(passwordNuevo, COSTO_BCRYPT);
@@ -399,6 +433,8 @@ const cambiarPassword = async (req, res) => {
                 visitasPerfil: true
             }
         });
+        await avisarSinFallar(usuarioActualizado, usuarioActualizado.email, 'Tu contraseña fue cambiada',
+            'La contraseña de tu cuenta en Urbanización Volare se cambió hace un momento.');
         return res.status(200).json({ mensaje: 'Contraseña actualizada exitosamente', user: usuarioActualizado });
     }
     catch (error) {
@@ -425,15 +461,29 @@ const cambiarEmail = async (req, res) => {
             }
         });
 
+        const bloqueo = limiteCredenciales.consultar(user.id);
+        if (bloqueo.bloqueado) {
+            return res.status(429).json({ mensaje: MENSAJE_CREDENCIALES_BLOQUEADAS(bloqueo.segundosRestantes) });
+        }
+
         const passwordValida = await bcryptjs.compare(passwordActual, user.password);
 
         if (!passwordValida) {
+            limiteCredenciales.registrarFallo(user.id);
             return res.status(400).json({ mensaje: 'Contraseña actual incorrecta' });
+        }
+        limiteCredenciales.limpiar(user.id);
+
+        // Se guarda en minúsculas, igual que en el registro, para que el inicio
+        // de sesión no dependa de cómo se escribió.
+        const emailNormalizado = normalizarEmail(emailNuevo);
+        if (emailNormalizado === normalizarEmail(user.email)) {
+            return res.status(400).json({ mensaje: 'El correo nuevo es el mismo que ya tienes' });
         }
 
         const emailExistente = await prisma.user.findUnique({
             where: {
-                email: emailNuevo
+                email: emailNormalizado
             }
         });
 
@@ -446,7 +496,7 @@ const cambiarEmail = async (req, res) => {
                 id: req.user.id
             },
             data: {
-                email: emailNuevo
+                email: emailNormalizado
             },
             select: {
                 id: true,
@@ -466,6 +516,9 @@ const cambiarEmail = async (req, res) => {
                 visitasPerfil: true
             }
         });
+        // Al correo anterior: si la cuenta fue tomada por otra persona, el dueño se entera.
+        await avisarSinFallar(usuarioActualizado, user.email, 'Tu correo de acceso fue cambiado',
+            `El correo de acceso de tu cuenta cambió a ${emailNormalizado}. Desde ahora debes iniciar sesión con ese correo.`);
         return res.status(200).json({ mensaje: 'Email actualizado exitosamente', user: usuarioActualizado });
     }
     catch(error){
