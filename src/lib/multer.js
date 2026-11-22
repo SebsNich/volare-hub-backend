@@ -36,4 +36,24 @@ const camposArchivosReservas = uploadReservas.fields([
 // Evidencia de una transferencia manual: mismos formatos y tamaño que los comprobantes.
 const camposEvidenciaTransferencia = uploadReservas.array('evidencia', 5)
 
-module.exports = { upload, uploadReservas, camposArchivosReservas, camposEvidenciaTransferencia }
+// Adjuntos del informe económico: el informe suele ser PDF o Excel, a veces Word o imagen.
+const MIMETYPES_INFORMES = [
+    'application/pdf', 'image/jpeg', 'image/png',
+    'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/csv'
+]
+
+const uploadInformes = multer({
+    storage: storage,
+    limits: { fileSize: 10 * 1024 * 1024, files: 5 }, // 10MB por archivo
+    fileFilter: (req, file, cb) => {
+        MIMETYPES_INFORMES.includes(file.mimetype)
+            ? cb(null, true)
+            : cb(errorDeUsuario('Solo se permiten PDF, Excel, Word, CSV o imágenes JPG y PNG'), false)
+    }
+})
+
+const camposAdjuntosInforme = uploadInformes.array('adjuntos', 5)
+
+module.exports = { upload, uploadReservas, camposArchivosReservas, camposEvidenciaTransferencia, camposAdjuntosInforme }

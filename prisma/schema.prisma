@@ -79,6 +79,8 @@ model Post {
 
   publico         Boolean   @default(false)
   enCarrusel      Boolean   @default(false)
+  // true = solo lo ven los residentes con cuenta APROBADA (p. ej. el informe económico).
+  soloAprobados   Boolean   @default(false)
   publicadoPorId  String?
   publicadoPor    User?     @relation("PostPublicadoPor", fields: [publicadoPorId], references: [id], onDelete: SetNull)
   publicadoEn     DateTime?

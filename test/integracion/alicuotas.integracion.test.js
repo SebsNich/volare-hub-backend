@@ -10,6 +10,7 @@ const prisma = require('../../src/lib/prisma');
 const { crearServicioPagos } = require('../../src/lib/pagos/servicioPagos');
 const { crearServicioAlicuotas } = require('../../src/lib/alicuotas/servicioAlicuotas');
 const { crearRegistroProveedores } = require('../../src/lib/pagos/registroProveedores');
+const { normalizarCodigoCasa } = require('../../src/lib/registro.helpers');
 
 const PREFIJO = 'it.alic.';
 const URL_FRONTEND = 'http://localhost:5173';
@@ -48,8 +49,9 @@ async function limpiar() {
 beforeEach(limpiar);
 after(async () => { await limpiar(); await prisma.$disconnect(); });
 
+// Las cuotas se guardan con la casa normalizada ("7" -> "07"), igual que el registro.
 const cuotaDe = (usuario, periodo = '2026-12') =>
-    prisma.cuotaAlicuota.findFirst({ where: { manzana: usuario.manzana.toUpperCase(), villa: usuario.villa.toUpperCase(), periodo } });
+    prisma.cuotaAlicuota.findFirst({ where: { manzana: normalizarCodigoCasa(usuario.manzana), villa: normalizarCodigoCasa(usuario.villa), periodo } });
 
 test('sin configuración guardada se usa la inicial: $60 y $55 en los primeros 5 días', async () => {
     const r = await alicuotas.obtenerConfig();

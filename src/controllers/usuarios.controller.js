@@ -10,6 +10,7 @@ const { FILTRO_SOLICITUDES_PENDIENTES } = require('../lib/resumenAdmin');
 const { validarContrasena } = require('../lib/contrasena');
 const { validarCambioEstado } = require('../lib/gestionUsuarios');
 const { ORDEN_PERFIL } = require('../lib/ordenPosts');
+const { filtroVisibilidad } = require('../lib/visibilidadPosts');
 const { SELECCION_PERFIL_PUBLICO, SELECCION_BUSCADOR } = require('../lib/perfilPublico');
 const {
     contarCuentasEnCasa,
@@ -66,9 +67,12 @@ const obtenerPerfilPublico = async (req, res) => {
             },
             select: SELECCION_PERFIL_PUBLICO
         });
+        // Los comunicados solo para aprobados no se muestran a quien aún está pendiente.
+        const quienMira = await prisma.user.findUnique({ where: { id: req.user.id }, select: { rol: true, estadoCuenta: true } });
         const posts = await prisma.post.findMany({
             where: {
-                autorId: req.params.id
+                autorId: req.params.id,
+                ...filtroVisibilidad(quienMira ?? { rol: req.user.rol })
             },
             orderBy: ORDEN_PERFIL,
             include: {

@@ -16,6 +16,7 @@ const sistemaRoutes = require('./routes/sistema.routes')
 const landingRoutes = require('./routes/landing.routes')
 const pagosRoutes = require('./routes/pagos.routes')
 const alicuotasRoutes = require('./routes/alicuotas.routes')
+const informesRoutes = require('./routes/informes.routes')
 const { registroPagos } = require('./lib/pagos/registroActivo')
 const { vencerReservasSinPago } = require('./lib/pagos/vencimientoActivo')
 const { iniciarVencimientoPeriodico } = require('./lib/pagos/vencimientoReservas')
@@ -68,6 +69,7 @@ app.use('/api/sistema', sistemaRoutes)
 app.use('/api/landing', landingRoutes)
 app.use('/api/pagos', pagosRoutes)
 app.use('/api/alicuotas', alicuotasRoutes)
+app.use('/api/informes', informesRoutes)
 
 app.get('/', (req, res) => {
     res.json({ mensaje: 'Bienvenido a la API de Volare Hub' });

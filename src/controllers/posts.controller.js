@@ -3,7 +3,14 @@ const { subirArchivo, eliminarArchivo, extraerPublicId } = require('../lib/cloud
 const { carpetas } = require('../lib/carpetas')
 const { obtenerParametrosPaginacion } = require('../lib/paginacion');
 const { ORDEN_FEED } = require('../lib/ordenPosts');
+const { filtroVisibilidad, puedeVerPost } = require('../lib/visibilidadPosts');
 const { calcularCambiosAlEditar, calcularCambiosPublico, validarCambioCarrusel } = require('../lib/landing.helpers');
+
+// El token solo trae el rol; el estado de la cuenta se confirma en la base.
+const usuarioActual = async (req) => {
+    const usuario = await prisma.user.findUnique({ where: { id: req.user.id }, select: { rol: true, estadoCuenta: true } });
+    return usuario ?? { rol: req.user.rol };
+}
 
 const crearPost = async (req, res) => {
     const { titulo, descripcion, tipo, anclado, ancladoPerfil } = req.body;
@@ -60,7 +67,7 @@ const obtenerPosts = async (req, res) => {
         const { skip, take } = obtenerParametrosPaginacion({ pagina: req.query.pagina });
 
         const posts = await prisma.post.findMany({
-            where: { estado: 'ACTIVO' },
+            where: { estado: 'ACTIVO', ...filtroVisibilidad(await usuarioActual(req)) },
             orderBy: ORDEN_FEED,
             skip,
             take: take + 1,
@@ -98,9 +105,11 @@ const obtenerPostPorId = async (req, res) => {
                 anclado: true,
                 ancladoPerfil: true,
                 creadoEn: true,
+                soloAprobados: true,
             }
         })
-        if (!post) {
+        // Mismo 404 que un post inexistente: no se revela que existe.
+        if (!post || !puedeVerPost(post, await usuarioActual(req))) {
             return res.status(404).json({ error: 'Post no encontrado' });
         }
         return res.status(200).json(post);
@@ -276,6 +285,10 @@ const cambiarPublico = async (req, res) => {
         const post = await prisma.post.findUnique({ where: { id: req.params.id } });
         if (!post) {
             return res.status(404).json({ error: 'Post no encontrado' });
+        }
+
+        if (post.soloAprobados && publico) {
+            return res.status(400).json({ error: 'Esta publicación es solo para residentes aprobados y no puede hacerse pública' });
         }
 
         const cambios = calcularCambiosPublico(post, publico, req.user.id, new Date());
