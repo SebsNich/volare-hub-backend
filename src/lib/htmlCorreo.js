@@ -15,7 +15,7 @@ const ETIQUETAS_SIMPLES = {
     li: 'margin: 0 0 4px;',
     blockquote: 'margin: 0 0 12px; padding-left: 12px; border-left: 3px solid #cccccc; color: #555555;'
 }
-const SIN_CIERRE = new Set(['br'])
+const MAX_ANCHO_IMAGEN = 900
 const BLOQUES_PELIGROSOS = /<(script|style|iframe|object|embed|svg|math|head|title)\b[\s\S]*?<\/\1\s*>/gi
 const ETIQUETA = /<(\/?)([a-zA-Z][a-zA-Z0-9]*)((?:\s+[^\s"'<>\/=]+(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s"'<>]+))?)*)\s*\/?>/g
 const ATRIBUTO = /([^\s"'<>\/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>]+)))?/g
@@ -71,7 +71,9 @@ function limpiarHtmlCorreo(entrada) {
             continue
         }
         if (nombre === 'img') {
-            const { src = '', alt = '' } = leerAtributos(atributosTexto)
+            const { src = '', alt = '', width = '' } = leerAtributos(atributosTexto)
+            // El ancho (en píxeles) lo elige el administrador en el editor; se acota para que no rompa el correo.
+            const ancho = /^\d{1,4}$/.test(width.trim()) ? Math.min(Math.max(Number(width), 20), MAX_ANCHO_IMAGEN) : null
             const enLinea = IMAGEN_EN_LINEA.exec(src.trim())
             let destino = null
             if (enLinea) {
@@ -82,7 +84,7 @@ function limpiarHtmlCorreo(entrada) {
             } else if (/^https:\/\/[^\s]+$/i.test(src.trim())) {
                 destino = src.trim()
             }
-            if (destino) salida += `<img src="${escaparAtributo(destino)}" alt="${escaparAtributo(alt)}" style="max-width: 100%; height: auto; display: block; margin: 8px 0;">`
+            if (destino) salida += `<img src="${escaparAtributo(destino)}" alt="${escaparAtributo(alt)}"${ancho ? ` width="${ancho}"` : ''} style="max-width: 100%; height: auto; display: block; margin: 8px 0;">`
             continue
         }
         if (Object.hasOwn(ETIQUETAS_SIMPLES, nombre)) {

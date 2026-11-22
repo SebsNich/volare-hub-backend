@@ -12,11 +12,11 @@ const correosResidentes = async () => {
 }
 
 // Publica el informe como COMUNICADO visible solo para cuentas aprobadas.
-// Imágenes y documentos se guardan igual que en cualquier publicación.
+// Imágenes y documentos van a su propia carpeta de Cloudinary (envios-masivos), separada de las publicaciones normales.
 async function publicarComunicado({ asunto, mensaje, adjuntos, autorId }) {
     const esImagen = (a) => a.mimetype.startsWith('image/')
     const subir = (lista, tipo, carpeta) => Promise.all(
-        lista.map(a => subirArchivo(a.buffer, carpetas().publicacion(carpeta), tipo, a.originalname).then(r => r.secure_url))
+        lista.map(a => subirArchivo(a.buffer, carpetas().envioMasivo(carpeta), tipo, a.originalname).then(r => r.secure_url))
     )
     const [imagenUrl, archivoUrl] = await Promise.all([
         subir(adjuntos.filter(esImagen), 'image', 'imagen'),

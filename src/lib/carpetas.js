@@ -8,6 +8,7 @@ const RAIZ_PRUEBAS = 'volare-hub-dev'
 
 const RESERVA_TIPOS = ['comprobantes', 'documentos']
 const PUBLICACION_TIPOS = { imagen: 'imagenes', documento: 'documentos' }
+const ENVIO_MASIVO_TIPOS = { imagen: 'imagenes', documento: 'documentos' }
 const PAGO_CONCEPTOS = { RESERVA: 'reservas', ALICUOTA: 'alicuotas' }
 
 function carpetas(env = process.env) {
@@ -17,6 +18,11 @@ function carpetas(env = process.env) {
         publicacion: (tipo) => {
             if (!PUBLICACION_TIPOS[tipo]) throw new Error(`Tipo de publicación desconocido: ${tipo}`)
             return `${raiz}/publicaciones/${PUBLICACION_TIPOS[tipo]}`
+        },
+        // Imágenes y documentos de los envíos masivos publicados como comunicado.
+        envioMasivo: (tipo) => {
+            if (!ENVIO_MASIVO_TIPOS[tipo]) throw new Error(`Tipo de archivo de envío masivo desconocido: ${tipo}`)
+            return `${raiz}/envios-masivos/${ENVIO_MASIVO_TIPOS[tipo]}`
         },
         reserva: (espacio, tipo) => {
             if (!RESERVA_TIPOS.includes(tipo)) throw new Error(`Tipo de archivo de reserva desconocido: ${tipo}`)

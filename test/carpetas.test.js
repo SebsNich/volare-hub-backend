@@ -25,3 +25,10 @@ test('un tipo desconocido falla en voz alta en vez de subir a una carpeta invent
     assert.throws(() => prod.reserva('CASA_CLUB', 'x'), /reserva/)
     assert.throws(() => prod.publicacion('x'), /publicaci/)
 })
+
+test('los envíos masivos tienen su propia carpeta, separada de las publicaciones', () => {
+    assert.equal(prod.envioMasivo('imagen'), 'volare-hub/envios-masivos/imagenes')
+    assert.equal(prod.envioMasivo('documento'), 'volare-hub/envios-masivos/documentos')
+    assert.equal(dev.envioMasivo('imagen'), 'volare-hub-dev/envios-masivos/imagenes')
+    assert.throws(() => prod.envioMasivo('otro'), /desconocido/)
+})

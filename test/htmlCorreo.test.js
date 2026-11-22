@@ -54,3 +54,12 @@ test('htmlATexto deja texto simple con viñetas y enlaces visibles', () => {
 test('htmlATexto de un mensaje vacío es cadena vacía', () => {
     assert.equal(htmlATexto('<p><br></p><div> </div>'), '')
 })
+
+test('el ancho de una imagen se conserva, acotado entre 20 y 900 píxeles', () => {
+    const con = (w) => limpiarHtmlCorreo(`<img src="https://res.cloudinary.com/a.png" width="${w}">`).html
+    assert.match(con('300'), /width="300"/)
+    assert.match(con('5000'), /width="900"/) // 4 dígitos: se limita al máximo
+    assert.match(con('5'), /width="20"/)
+    assert.doesNotMatch(con('abc'), /width=/)
+    assert.doesNotMatch(con('100%'), /width=/)
+})
